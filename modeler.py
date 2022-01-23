@@ -1,198 +1,217 @@
-import threading, time, math, logging
+import time, math
+from dataclasses import dataclass
 
-# variables
 COMPLETION_TARGET_DISTANCE = 512
-MAX_IN_FLIGHT = 128
+MAX_IN_FLIGHT = 1
 MIN_DISPATCH = 2
 
-# How long it takes to submit 1 IO
-BASE_SUBMISSION_LATENCY = 0.001
+CONSUMPTION_RATE = 1
+BASE_COMPLETION_LATENCY = 1.2
+SUBMISSION_OVERHEAD = 0.1
 
-# How long it takes 1 IO to complete if only 1 is in flight
-BASE_COMPLETION_LATENCY = 0.1
+@dataclass
+class IO:
+    expiry: int = 0
 
-# Time between calls to next()
-BASE_CONSUMPTION_LATENCY = 0.1
+    def is_expired(self, current_tick):
+        return self.expiry <= current_tick
 
-logger = logging.getLogger()
-logger.setLevel('CRITICAL')
-
-class AtomicCounter:
-    def __init__(self, initial=0):
-        self.value = initial
-        self._lock = threading.Lock()
-
-    def increment(self, num=1):
-        with self._lock:
-            self.value += num
-            return self.value
-
-    def increment_batch_get_batch_size(self, max_val, target_batch_size):
-        with self._lock:
-            batch_size = min(max_val - self.value, target_batch_size)
-            logger.warning(f'Submitted: {self.value}. nblocks {max_val}, min_dispatch {target_batch_size}, batch size {batch_size}')
-            self.value += batch_size
-            logger.warning(f'incrementing submitted by {batch_size}')
-            return batch_size
+# TODO: sublcass an ABC class
+class Bucket:
+    def __init__(self):
+        self.ios = []
+        self.target_bucket = None
 
     def __repr__(self):
-        return str(self.value)
-
-class System:
-    def __init__(self):
-        self.base_submission_latency = BASE_SUBMISSION_LATENCY
-        self.base_completion_latency = BASE_COMPLETION_LATENCY
-        self.base_consumption_latency = BASE_CONSUMPTION_LATENCY
-        self.min_dispatch = MIN_DISPATCH
-
-        self.global_completed = AtomicCounter()
-        self.global_consumed = AtomicCounter()
-        self.global_submitted = AtomicCounter()
-
-    # How long it takes 1 IO to complete when nrequests are in flight
-    def completion_latency(self, nrequests):
-        # TODO: fix this
-        # distance in nrequests before a jump in latency
-        # e.g. after 256 kB, request latency jumps because it must be spread
-        # across multiple network requests in Azure
-        # in nrequests
-        d = 4
-        # how much does latency jump by when it increases
-        # in ms
-        j = 0.02
-        # slope of curve
-        m = 0.1
-        latency = (m * nrequests) + self.base_completion_latency + math.floor(nrequests/d) * j
-        return self.base_completion_latency
-
-    # How long it takes to submit batch_size # of requests
-    def submission_latency(self, window):
-        # TODO: fix this
-        # variable_submission_cost = 0.0001
-        # latency = self.base_submission_latency + (window *
-        #                                           variable_submission_cost)
-        return self.base_submission_latency
-
-    # Fixed cost for time to wait between calls to next() on the scan
-    def consumption_latency(self):
-        return self.base_consumption_latency
-
-    def window_size(self, nblocks, completed, in_flight):
-        if completed >= COMPLETION_TARGET_DISTANCE - self.min_dispatch:
-            logger.warning('No need to prefetch due to suffient completed IOs')
-            return 0
-        if in_flight >= MAX_IN_FLIGHT:
-            logger.warning('Cannot prefetch because hit MAX_IN_FLIGHT')
-            return 0
-
-        window = self.global_submitted.increment_batch_get_batch_size(nblocks, self.min_dispatch)
-        return window
-
-    def run(self):
-        ioq = IOQueue()
-        nblocks = 10
-
-        completion_worker = CompletionWorker(ioq, nblocks, self)
-
-        completion_worker.start()
-        ioq.submit_io()
-        start = time.time()
-        for i in Scan(ioq, nblocks, self):
-            logger.warning(f'Acquired: {i}')
-        end = time.time()
-        logger.critical(f'Total Time: {end - start}')
-
-class IOQueue:
-    def __init__(self):
-        self._completed = 0
-        self._in_flight = 0
-
-        self.cv = threading.Condition()
+        return f"{type(self).__name__}()"
 
     @property
-    def in_flight(self):
-        with self.cv:
-            return self._in_flight
+    def num_ios(self):
+        return len(self.ios)
 
-    @property
-    def completed(self):
-        with self.cv:
-            return self._completed
+    def add(self, io, current_tick):
+        io.expiry = current_tick + self.latency(self.num_ios)
+        self.ios.append(io)
 
-    def submit_io(self):
-        with self.cv:
-            self._in_flight += 1
+    def move(self, io, current_tick):
+        self.ios.remove(io)
+        self.target_bucket.add(io, current_tick)
 
-            logger.warning(f'Submitted IO. In-flight {self._in_flight}. Available Completed: {self._completed}.')
-            self.cv.notify_all()
+    def latency(self, num_ios):
+        return 0
 
-    def complete_io(self):
-        with self.cv:
-            while self._in_flight < 1:
-                logger.warning('No IO in flight to complete')
-                self.cv.wait()
+    def run(self, current_tick):
+        if not self.target_bucket:
+            return
 
-            self._in_flight -= 1
-            self._completed += 1
+        for io in self.ios:
+            if not io.is_expired(current_tick):
+                continue
+            print(f'tick: {current_tick}. moving io from {self} to {self.target_bucket}')
+            self.move(io, current_tick)
 
-            logger.warning(f'Completed IO. In-flight {self._in_flight}. Available Completed: {self._completed}')
-            self.cv.notify_all()
+class SubmittedBucket(Bucket):
+    def latency(self, num_ios):
+        return SUBMISSION_OVERHEAD
 
-    def get_io(self):
-        with self.cv:
-            while self._completed < 1:
-                logger.warning('No IO completed yet to get')
-                self.cv.wait()
+class InFlightBucket(Bucket):
+    # Latency here is how long an IO will be inflight -- or completion latency
+    def latency(self, num_ios):
+        queue_depth = max(num_ios, 1)
+        completion_latency = queue_depth * BASE_COMPLETION_LATENCY
+        print(f'num_ios is {num_ios}. completion latency is {completion_latency}')
+        return completion_latency
 
-            self._completed -= 1
+class CompletedBucket(Bucket):
+    pass
 
-            logger.warning(f'Acquired IO. In-flight {self._in_flight}. Available Completed: {self._completed}.')
+class Pipeline:
+    def __init__(self, buckets):
+        self.buckets = buckets
+
+        for i in range(len(self.buckets) - 1):
+            self.buckets[i].target_bucket = self.buckets[i + 1]
+
+    def enqueue(self, item, current_tick):
+        self.buckets[0].add(item, current_tick)
+
+    def dequeue(self, current_tick):
+        for io in self.buckets[-1].ios:
+            if not io.is_expired(current_tick):
+                continue
+            self.buckets[-1].ios.remove(io)
+            return io
+
+    def run(self, current_tick):
+        for bucket in self.buckets:
+            bucket.run(current_tick)
 
 class Scan:
-    def __init__(self, ioq, nblocks, system):
+    def __init__(self, pipeline, nblocks, initial_tick=0, consumption_rate=CONSUMPTION_RATE):
+        self.pipeline = pipeline
+        self.consumption_rate = consumption_rate
+        self.last_consumption = initial_tick
         self.nblocks = nblocks
-        self.ioq = ioq
-        self.system = system
-        self.local_acquired = 0
+        self.submitted = 0
+        self.tried_consumed = False
+        self.acquired_io = None
+        self.consumed = 0
 
-    def __iter__(self):
-        return self
+    def should_consume(self, current_tick):
+        if self.last_consumption + self.consumption_rate < current_tick:
+            return False
+        self.last_consumption = current_tick
+        self.tried_consumed = True
+        return True
 
-    def __next__(self):
-        if self.system.global_consumed.increment() <= self.nblocks:
-            # time.sleep(self.system.consumption_latency())
-            self.ioq.get_io()
-            self.local_acquired += 1
-            self.prefetch()
-            return self.local_acquired
-        raise StopIteration
+    def get_io(self, current_tick):
+        self.acquired_io = self.pipeline.dequeue(current_tick)
+        return self.acquired_io
 
-    def prefetch(self):
-        window = self.system.window_size(self.nblocks, self.ioq.completed,
-                                         self.ioq.in_flight)
+    def calc_submit_window(self, completed, inflight):
+        if completed >= COMPLETION_TARGET_DISTANCE - MIN_DISPATCH:
+            return 0
 
-        # time.sleep(self.system.submission_latency(window))
+        if inflight >= MAX_IN_FLIGHT:
+            return 0
 
-        while window > 0:
-            self.ioq.submit_io()
-            window -= 1
+        # Submit the lesser of the number of blocks left in the scan and
+        # MIN_DISPATCH
+        batch_size = min(self.nblocks - self.submitted, MIN_DISPATCH)
 
-class CompletionWorker(threading.Thread):
-    def __init__(self, ioq, nblocks, system):
-        self.nblocks = nblocks
-        self.ioq = ioq
-        self.system = system
-        # local completed counter will not equal nblocks if multiple threads
-        # doing completions
-        self.local_completed = 0
-        super().__init__(name='completion worker')
+        return batch_size
 
-    def run(self):
-        while self.system.global_completed.increment() <= self.nblocks:
-            time.sleep(self.system.completion_latency(self.ioq.in_flight))
-            self.ioq.complete_io()
-            self.local_completed += 1
-            logger.warning(f'Completed: {self.local_completed}')
+    def submit_io(self, current_tick, num_to_submit):
+        while num_to_submit > 0:
+            self.pipeline.enqueue(IO(), current_tick)
+            self.submitted += 1
+            num_to_submit -= 1
 
-system = System()
-system.run()
+    def run(self, current_tick, completed_bucket, inflight_bucket):
+        scan.submit_io(current_tick, scan.calc_submit_window(completed_bucket.num_ios,
+                                                             inflight_bucket.num_ios))
+
+        if scan.should_consume(current_tick):
+            if scan.get_io(current_tick):
+                scan.consumed += 1
+
+class ScanMeasurer:
+    def __init__(self, scan):
+        self.scan = scan
+        self.tried_consumed = []
+        self.waited = []
+        self.acquired = []
+
+    def __repr__(self):
+        return f'TryConsume:{self.tried_consumed}\nAcquired:  {self.acquired}\nWaited:    {self.waited}\n'
+
+    def measure(self):
+        self.tried_consumed.append(int(self.scan.tried_consumed))
+        self.acquired.append(int(self.scan.acquired_io is not None))
+        self.waited.append(int(self.scan.acquired_io is None))
+
+class BucketMeasurer:
+    def __init__(self, bucket):
+        self.before_ios = []
+        self.after_ios = []
+        self.bucket = bucket
+
+    def measure_before_scan(self):
+        self.before_ios.append(self.bucket.num_ios)
+
+    def measure_after_scan(self):
+        self.after_ios.append(self.bucket.num_ios)
+
+    def __repr__(self):
+        return f'Before: {self.before_ios}\nAfter:  {self.after_ios}\n'
+
+class SubmittedMeasurer(BucketMeasurer):
+    def __repr__(self):
+        return 'Submitted:\n' + super().__repr__()
+
+class InflightMeasurer(BucketMeasurer):
+    def __repr__(self):
+        return 'InFlight:\n' + super().__repr__()
+
+class CompletedMeasurer(BucketMeasurer):
+    def __repr__(self):
+        return 'Completed:\n' + super().__repr__()
+
+submitted_bucket = SubmittedBucket()
+inflight_bucket = InFlightBucket()
+completed_bucket = CompletedBucket()
+
+buckets = [submitted_bucket, inflight_bucket, completed_bucket]
+pipeline = Pipeline(buckets)
+
+submitted_measurer = SubmittedMeasurer(submitted_bucket)
+inflight_measurer = InflightMeasurer(inflight_bucket)
+completed_measurer = CompletedMeasurer(completed_bucket)
+
+bucket_measurers = [submitted_measurer, inflight_measurer, completed_measurer]
+
+nblocks = 10
+total_ticks = 10
+
+scan = Scan(pipeline, nblocks)
+scan_measurer = ScanMeasurer(scan)
+
+for i in range(total_ticks):
+    if scan.consumed >= scan.nblocks:
+        break
+
+    scan_measurer.measure()
+
+    for bucket_measurer in bucket_measurers:
+        bucket_measurer.measure_before_scan()
+
+    scan.run(i, completed_bucket, inflight_bucket)
+
+    for bucket_measurer in bucket_measurers:
+        bucket_measurer.measure_after_scan()
+
+    pipeline.run(i)
+
+print(scan_measurer)
+for bucket_measurer in bucket_measurers:
+    print(bucket_measurer)
