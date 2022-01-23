@@ -132,79 +132,91 @@ class Scan:
         return submitted
 
     def run(self, current_tick, completed, inflight):
-
         scan.submit_io(current_tick, scan.calc_submit_window(completed, inflight))
 
         if scan.should_consume(current_tick):
             if scan.get_io(current_tick):
                 scan.consumed += 1
 
-class Measurer:
-    def __init__(self, buckets, scan, pipeline):
+class ScanMeasurer:
+    def __init__(self, scan):
         self.scan = scan
-        self.buckets = buckets
-        self.pipeline = pipeline
-        # Can be bitmap
         self.tried_consumed = []
-        self.acquired = []
         self.waited = []
-
-        self.before_submitted = []
-        self.before_inflight = []
-        self.before_completed = []
-
-        self.after_submitted = []
-        self.after_inflight = []
-        self.after_completed = []
+        self.acquired = []
 
     def __repr__(self):
-        tried_consumed = f'TryConsume:{self.tried_consumed}\n'
-        waited = f'Waited:    {self.waited}\n'
-        acquired = f'Acquired:  {self.acquired}\n'
+        return f'TryConsume:{self.tried_consumed}\nAcquired:  {self.acquired}\nWaited:    {self.waited}\n'
 
-        submitted_before = f'Submitted Before: {self.before_submitted}\n'
-        inflight_before = f'Inflight Before:  {self.before_inflight}\n'
-        completed_before = f'Completed Before: {self.before_completed}\n'
-        submitted_after = f'Submitted After: {self.after_submitted}\n'
-        inflight_after = f'Inflight After:  {self.after_inflight}\n'
-        completed_after = f'Completed After: {self.after_completed}\n'
-        return tried_consumed + waited + acquired + submitted_before + inflight_before + completed_before + submitted_after + inflight_after + completed_after
-
-    def measure_before_scan(self):
-        self.before_submitted.append(self.buckets[0].num_ios)
-        self.before_inflight.append(self.buckets[1].num_ios)
-        self.before_completed.append(self.buckets[2].num_ios)
-
-    def measure_after_scan(self):
+    def measure(self):
         self.tried_consumed.append(int(self.scan.tried_consumed))
         self.acquired.append(int(self.scan.acquired_io is not None))
         self.waited.append(int(self.scan.acquired_io is None))
 
-        self.after_submitted.append(self.buckets[0].num_ios)
-        self.after_inflight.append(self.buckets[1].num_ios)
-        self.after_completed.append(self.buckets[2].num_ios)
+class BucketMeasurer:
+    def __init__(self, bucket):
+        self.before_ios = []
+        self.after_ios = []
+        self.bucket = bucket
+
+    def measure_before_scan(self):
+        self.before_ios.append(self.bucket.num_ios)
+
+    def measure_after_scan(self):
+        self.after_ios.append(self.bucket.num_ios)
+
+    def __repr__(self):
+        return f'Before: {self.before_ios}\nAfter:  {self.after_ios}\n'
+
+class SubmittedMeasurer(BucketMeasurer):
+    def __repr__(self):
+        return 'Submitted:\n' + super().__repr__()
+
+class InflightMeasurer(BucketMeasurer):
+    def __repr__(self):
+        return 'InFlight:\n' + super().__repr__()
+
+class CompletedMeasurer(BucketMeasurer):
+    def __repr__(self):
+        return 'Completed:\n' + super().__repr__()
 
 submitted = SubmittedBucket()
 inflight = InFlightBucket()
 completed = CompletedBucket()
 
 buckets = [submitted, inflight, completed]
-
 pipeline = Pipeline(buckets)
+
+submitted_measurer = SubmittedMeasurer(submitted)
+inflight_measurer = InflightMeasurer(inflight)
+completed_measurer = CompletedMeasurer(completed)
+
+bucket_measurers = [submitted_measurer, inflight_measurer, completed_measurer]
+
 nblocks = 10
 total_ticks = 10
 
 scan = Scan(pipeline, nblocks)
+scan_measurer = ScanMeasurer(scan)
 
-measurer = Measurer(buckets, scan, pipeline)
 
 # or until condition met
 for i in range(total_ticks):
     if scan.consumed >= scan.nblocks:
         break
-    measurer.measure_before_scan()
+
+    scan_measurer.measure()
+
+    for bucket_measurer in bucket_measurers:
+        bucket_measurer.measure_before_scan()
+
     scan.run(i, completed, inflight)
-    measurer.measure_after_scan()
+
+    for bucket_measurer in bucket_measurers:
+        bucket_measurer.measure_after_scan()
+
     pipeline.run(i)
 
-print(measurer)
+print(scan_measurer)
+for bucket_measurer in bucket_measurers:
+    print(bucket_measurer)
