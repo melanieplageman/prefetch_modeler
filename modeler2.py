@@ -1,20 +1,20 @@
-from enum import Enum
 import time, math
+from dataclasses import dataclass
 
 COMPLETION_TARGET_DISTANCE = 512
 MAX_IN_FLIGHT = 1
 MIN_DISPATCH = 2
 
-# TODO: subclass a data class
+CONSUMPTION_RATE = 1
+BASE_COMPLETION_LATENCY = 1.2
+SUBMISSION_OVERHEAD = 0.1
+
+@dataclass
 class IO:
-    def __init__(self):
-        self.expiry = None
+    expiry: int = 0
 
     def is_expired(self, current_tick):
         return self.expiry <= current_tick
-
-    def __repr__(self):
-        return f'IO. Entered: {str(self.expiry)}'
 
 # TODO: sublcass an ABC class
 class Bucket:
@@ -51,14 +51,14 @@ class Bucket:
             self.move(io, current_tick)
 
 class SubmittedBucket(Bucket):
-    # Submission overhead
     def latency(self, num_ios):
-        return 0.1
+        return SUBMISSION_OVERHEAD
 
 class InFlightBucket(Bucket):
+    # Latency here is how long an IO will be inflight -- or completion latency
     def latency(self, num_ios):
         queue_depth = max(num_ios, 1)
-        completion_latency = queue_depth * 1.2
+        completion_latency = queue_depth * BASE_COMPLETION_LATENCY
         print(f'num_ios is {num_ios}. completion latency is {completion_latency}')
         return completion_latency
 
@@ -87,13 +87,12 @@ class Pipeline:
             bucket.run(current_tick)
 
 class Scan:
-    def __init__(self, pipeline, nblocks, initial_tick=0, consumption_rate=1):
+    def __init__(self, pipeline, nblocks, initial_tick=0, consumption_rate=CONSUMPTION_RATE):
         self.pipeline = pipeline
         self.consumption_rate = consumption_rate
         self.last_consumption = initial_tick
         self.nblocks = nblocks
         self.submitted = 0
-        self.batch_size = 0
         self.tried_consumed = False
         self.acquired_io = None
         self.consumed = 0
@@ -109,30 +108,28 @@ class Scan:
         self.acquired_io = self.pipeline.dequeue(current_tick)
         return self.acquired_io
 
-    def calc_submit_window(self, completed_bucket, inflight_bucket):
-        if completed.num_ios >= COMPLETION_TARGET_DISTANCE - MIN_DISPATCH:
+    def calc_submit_window(self, completed, inflight):
+        if completed >= COMPLETION_TARGET_DISTANCE - MIN_DISPATCH:
             return 0
 
-        if inflight_bucket.num_ios >= MAX_IN_FLIGHT:
+        if inflight >= MAX_IN_FLIGHT:
             return 0
 
         # Submit the lesser of the number of blocks left in the scan and
         # MIN_DISPATCH
-        self.batch_size = min(self.nblocks - self.submitted, MIN_DISPATCH)
+        batch_size = min(self.nblocks - self.submitted, MIN_DISPATCH)
 
-        return self.batch_size
+        return batch_size
 
     def submit_io(self, current_tick, num_to_submit):
-        submitted = num_to_submit
         while num_to_submit > 0:
             self.pipeline.enqueue(IO(), current_tick)
             self.submitted += 1
             num_to_submit -= 1
 
-        return submitted
-
-    def run(self, current_tick, completed, inflight):
-        scan.submit_io(current_tick, scan.calc_submit_window(completed, inflight))
+    def run(self, current_tick, completed_bucket, inflight_bucket):
+        scan.submit_io(current_tick, scan.calc_submit_window(completed_bucket.num_ios,
+                                                             inflight_bucket.num_ios))
 
         if scan.should_consume(current_tick):
             if scan.get_io(current_tick):
@@ -180,16 +177,16 @@ class CompletedMeasurer(BucketMeasurer):
     def __repr__(self):
         return 'Completed:\n' + super().__repr__()
 
-submitted = SubmittedBucket()
-inflight = InFlightBucket()
-completed = CompletedBucket()
+submitted_bucket = SubmittedBucket()
+inflight_bucket = InFlightBucket()
+completed_bucket = CompletedBucket()
 
-buckets = [submitted, inflight, completed]
+buckets = [submitted_bucket, inflight_bucket, completed_bucket]
 pipeline = Pipeline(buckets)
 
-submitted_measurer = SubmittedMeasurer(submitted)
-inflight_measurer = InflightMeasurer(inflight)
-completed_measurer = CompletedMeasurer(completed)
+submitted_measurer = SubmittedMeasurer(submitted_bucket)
+inflight_measurer = InflightMeasurer(inflight_bucket)
+completed_measurer = CompletedMeasurer(completed_bucket)
 
 bucket_measurers = [submitted_measurer, inflight_measurer, completed_measurer]
 
@@ -199,8 +196,6 @@ total_ticks = 10
 scan = Scan(pipeline, nblocks)
 scan_measurer = ScanMeasurer(scan)
 
-
-# or until condition met
 for i in range(total_ticks):
     if scan.consumed >= scan.nblocks:
         break
@@ -210,7 +205,7 @@ for i in range(total_ticks):
     for bucket_measurer in bucket_measurers:
         bucket_measurer.measure_before_scan()
 
-    scan.run(i, completed, inflight)
+    scan.run(i, completed_bucket, inflight_bucket)
 
     for bucket_measurer in bucket_measurers:
         bucket_measurer.measure_after_scan()
