@@ -5,11 +5,6 @@ COMPLETION_TARGET_DISTANCE = 512
 MAX_IN_FLIGHT = 1
 MIN_DISPATCH = 2
 
-class IOState(Enum):
-    SUBMITTED = 0
-    INFLIGHT = 1
-    COMPLETED = 2
-
 # TODO: subclass a data class
 class IO:
     def __init__(self):
@@ -56,15 +51,11 @@ class Bucket:
             self.move(io, current_tick)
 
 class SubmittedBucket(Bucket):
-    io_state = IOState.SUBMITTED
-
     # Submission overhead
     def latency(self, num_ios):
         return 0.1
 
 class InFlightBucket(Bucket):
-    io_state = IOState.INFLIGHT
-
     def latency(self, num_ios):
         queue_depth = max(num_ios, 1)
         completion_latency = queue_depth * 1.2
@@ -72,7 +63,7 @@ class InFlightBucket(Bucket):
         return completion_latency
 
 class CompletedBucket(Bucket):
-    io_state = IOState.COMPLETED
+    pass
 
 class Pipeline:
     def __init__(self, buckets):
