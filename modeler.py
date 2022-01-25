@@ -57,8 +57,8 @@ class SubmittedBucket(Bucket):
 class InFlightBucket(Bucket):
     # Latency here is how long an IO will be inflight -- or completion latency
     def latency(self, num_ios):
-        queue_depth = max(num_ios, 1)
-        completion_latency = queue_depth * BASE_COMPLETION_LATENCY
+        # TODO: make this change with the number of requests inflight
+        completion_latency = BASE_COMPLETION_LATENCY
         print(f'num_ios is {num_ios}. completion latency is {completion_latency}')
         return completion_latency
 
