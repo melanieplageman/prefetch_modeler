@@ -1,59 +1,73 @@
 from modeler import *
 from measurer import *
 from metric import *
-from config import *
 import pprint
 
-submitted_bucket = SubmittedBucket()
-inflight_bucket = InFlightBucket()
-completed_bucket = CompletedBucket()
+import matplotlib.pyplot as plt
+import pandas as pd
 
-buckets = [submitted_bucket, inflight_bucket, completed_bucket]
-pipeline = Pipeline(buckets)
+class Model:
+    def __init__(self, config):
+        submitted_bucket = SubmittedBucket()
+        self.inflight_bucket = InFlightBucket()
+        self.completed_bucket = CompletedBucket()
 
-submitted_measurer = SubmittedMeasurer(submitted_bucket)
-inflight_measurer = InflightMeasurer(inflight_bucket)
-completed_measurer = CompletedMeasurer(completed_bucket)
+        self.pipeline = Pipeline([
+            submitted_bucket, self.inflight_bucket, self.completed_bucket
+        ])
 
-bucket_measurers = [submitted_measurer, inflight_measurer, completed_measurer]
+        self.submitted_measurer = SubmittedMeasurer(self.submitted_bucket)
+        self.inflight_measurer = InflightMeasurer(self.inflight_bucket)
+        self.completed_measurer = CompletedMeasurer(self.completed_bucket)
 
-nblocks = 50
-total_ticks = 50
+        self.bucket_measurers = [self.submitted_measurer,
+                                 self.inflight_measurer, self.completed_measurer]
 
-scan = Scan(pipeline, nblocks)
-scan_measurer = ScanMeasurer(scan)
+        nblocks = config['run']['nblocks']
+        self.scan = Scan(self.pipeline, nblocks)
+        self.scan_measurer = ScanMeasurer(self.scan)
 
-for i in range(total_ticks):
-    if scan.consumed >= scan.nblocks:
-        break
+        self.total_ticks = config['run']['nticks']
+        self.labeled_metrics = None
 
-    scan_measurer.measure()
+    def run(self):
+        for i in range(self.total_ticks):
+            if self.scan.consumed >= self.scan.nblocks:
+                break
 
-    for bucket_measurer in bucket_measurers:
-        bucket_measurer.measure_before_scan()
+            self.scan_measurer.measure()
 
-    scan.run(i, completed_bucket, inflight_bucket)
+            for bucket_measurer in self.bucket_measurers:
+                bucket_measurer.measure_before_scan()
 
-    for bucket_measurer in bucket_measurers:
-        bucket_measurer.measure_after_scan()
+            self.scan.run(i, self.completed_bucket, self.inflight_bucket)
 
-    pipeline.run(i)
+            for bucket_measurer in self.bucket_measurers:
+                bucket_measurer.measure_after_scan()
 
-submitted_metric = SubmittedMetric(submitted_measurer)
-inflight_metric = InflightMetric(inflight_measurer)
-completed_metric = CompletedMetric(completed_measurer)
-tryconsume_metric = TryConsumeMetric(scan_measurer)
-waited_metric = WaitedMetric(scan_measurer)
-acquired_metric = AcquiredMetric(scan_measurer)
+            self.pipeline.run(i)
 
-metrics = [submitted_metric, inflight_metric, completed_metric,
-           tryconsume_metric, waited_metric, acquired_metric]
+        submitted_metric = SubmittedMetric(self.submitted_measurer)
+        inflight_metric = InflightMetric(self.inflight_measurer)
+        completed_metric = CompletedMetric(self.completed_measurer)
+        tryconsume_metric = TryConsumeMetric(self.scan_measurer)
+        waited_metric = WaitedMetric(self.scan_measurer)
+        acquired_metric = AcquiredMetric(self.scan_measurer)
 
-labeled_metrics = {
-    'submitted': submitted_metric.data,
-    'inflight': inflight_metric.data,
-    'completed': completed_metric.data,
-    'tryconsume': tryconsume_metric.data,
-    'waited': waited_metric.data,
-    'acquired': acquired_metric.data
-}
+        metrics = [submitted_metric, inflight_metric, completed_metric,
+                tryconsume_metric, waited_metric, acquired_metric]
+
+        self.labeled_metrics = {
+            'submitted': submitted_metric.data,
+            'inflight': inflight_metric.data,
+            'completed': completed_metric.data,
+            'tryconsume': tryconsume_metric.data,
+            'waited': waited_metric.data,
+            'acquired': acquired_metric.data
+        }
+
+    def plot(self, figure):
+        ax = figure.add_subplot()
+        df = pd.DataFrame(self.labeled_metrics)
+
+        df.plot( ax=ax)

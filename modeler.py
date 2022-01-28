@@ -6,13 +6,6 @@ from config import *
 logger = logging.getLogger()
 logger.setLevel('CRITICAL')
 
-MAX_IN_FLIGHT = 10
-MIN_DISPATCH = 2
-
-CONSUMPTION_RATE = 1
-BASE_COMPLETION_LATENCY = 1.2
-SUBMISSION_OVERHEAD = 0.1
-
 @dataclass
 class IO:
     expiry: int = 0
@@ -25,6 +18,7 @@ class Bucket:
     def __init__(self):
         self.ios = []
         self.target_bucket = None
+        self.storage = Storage(config['storage'])
 
     def __repr__(self):
         return f"{type(self).__name__}()"
@@ -58,16 +52,14 @@ class Bucket:
 
 class SubmittedBucket(Bucket):
     def latency(self, num_ios):
-        return SUBMISSION_OVERHEAD
+        return self.storage.submission_overhead
 
 class InFlightBucket(Bucket):
     # Latency here is how long an IO will be inflight -- or completion latency
     def latency(self, num_ios):
-        # TODO: make this change with the number of requests inflight
-        completion_latency = BASE_COMPLETION_LATENCY
-        completion_latency = (0.01 * num_ios) + BASE_COMPLETION_LATENCY
+        completion_latency = self.storage.latency(num_ios)
         logger.warning('num_ios is %s. completion latency is %s.', num_ios,
-                   completion_latency)
+                    completion_latency)
         return completion_latency
 
 class CompletedBucket(Bucket):
@@ -95,16 +87,17 @@ class Pipeline:
             bucket.run(current_tick)
 
 class Scan:
-    def __init__(self, pipeline, nblocks, initial_tick=0,
-                 consumption_rate=CONSUMPTION_RATE):
+    def __init__(self, pipeline, initial_tick=0):
         self.pipeline = pipeline
-        self.consumption_rate = consumption_rate
+        self.consumption_rate = config['run']['consumption_rate']
         self.last_consumption = initial_tick
-        self.nblocks = nblocks
+        self.nblocks = config['run']['nblocks']
         self.submitted = 0
         self.tried_consumed = False
         self.acquired_io = None
         self.consumed = 0
+        self.adjustment_algorithm = AdjustmentAlgorithm(config['adjustment_algorithm'])
+        self.storage = Storage(config['storage'])
 
     def should_consume(self, current_tick):
         if self.last_consumption + self.consumption_rate < current_tick:
@@ -118,21 +111,13 @@ class Scan:
         return self.acquired_io
 
     def calc_submit_window(self, completed, inflight):
-        inputs = config['adjustment_algorithm']['inputs']
-
-        completion_target_distance = inputs['completion_target_distance']
-        min_dispatch = inputs['min_dispatch']
-        max_in_flight = inputs['max_in_flight']
-
-        if completed >= completion_target_distance - min_dispatch:
-            return 0
-
-        if inflight >= max_in_flight:
+        if self.adjustment_algorithm.hit_limit(completed, inflight):
             return 0
 
         # Submit the lesser of the number of blocks left in the scan and
-        # MIN_DISPATCH
-        batch_size = min(self.nblocks - self.submitted, min_dispatch)
+        # min_dispatch
+        batch_size = min(self.nblocks - self.submitted,
+                         self.adjustment_algorithm.min_dispatch)
 
         return batch_size
 
