@@ -1,73 +1,67 @@
 from modeler import *
 from measurer import *
-from metric import *
 import pprint
+from measurer import TotalMeasurer
+from modeler import Pipeline, Scan, IO, Prefetcher
+from custom import SeqScan, SeqScanPrefetcher, SeqScanPipeline
 
 import matplotlib.pyplot as plt
 import pandas as pd
 
-class Model:
-    def __init__(self, config):
-        submitted_bucket = SubmittedBucket()
-        self.inflight_bucket = InFlightBucket()
-        self.completed_bucket = CompletedBucket()
+def completion_latency_func(num_ios):
+    # TODO: make this change with the number of requests inflight
+    base_completion_latency = 1.2
+    completion_latency = (0.01 * num_ios) + base_completion_latency
+    return completion_latency
 
-        self.pipeline = Pipeline([
-            submitted_bucket, self.inflight_bucket, self.completed_bucket
-        ])
+def submission_overhead_func(num_ios):
+    return 0.1
 
-        self.submitted_measurer = SubmittedMeasurer(self.submitted_bucket)
-        self.inflight_measurer = InflightMeasurer(self.inflight_bucket)
-        self.completed_measurer = CompletedMeasurer(self.completed_bucket)
+class ConfiguredSeqScanPrefetcher(SeqScanPrefetcher):
+    def __init__(self, scan, pipeline):
+        super().__init__(scan, pipeline)
+        self.min_dispatch = 2
+        self.max_in_flight = 10
+        self.completion_target_distance = 512
 
-        self.bucket_measurers = [self.submitted_measurer,
-                                 self.inflight_measurer, self.completed_measurer]
+    def submit_size(self):
+        if self.completed_bucket.num_ios >= self.completion_target_distance - self.min_dispatch:
+            self.completion_target_distance += 1
+            return 0
 
-        nblocks = config['run']['nblocks']
-        self.scan = Scan(self.pipeline, nblocks)
-        self.scan_measurer = ScanMeasurer(self.scan)
+        if self.inflight_bucket.num_ios >= self.max_in_flight:
+            return 0
 
-        self.total_ticks = config['run']['nticks']
-        self.labeled_metrics = None
+        # Submit the lesser of the number of blocks left in the scan and
+        # min_dispatch
+        return min(self.scan.nblocks - self.submitted,
+                         self.min_dispatch)
 
-    def run(self):
-        for i in range(self.total_ticks):
-            if self.scan.consumed >= self.scan.nblocks:
-                break
+class ConfiguredSeqScan(SeqScan):
+    def __init__(self, pipeline):
+        super().__init__(pipeline)
 
-            self.scan_measurer.measure()
+        self.consumption_rate = 1
+        self.nblocks = 10
 
-            for bucket_measurer in self.bucket_measurers:
-                bucket_measurer.measure_before_scan()
+class Storage(SeqScanPipeline):
+    def __init__(self):
+        super().__init__()
 
-            self.scan.run(i, self.completed_bucket, self.inflight_bucket)
+        self.max_iops = 10000
+        self.submitted_bucket.latency = submission_overhead_func
+        self.inflight_bucket.latency = completion_latency_func
 
-            for bucket_measurer in self.bucket_measurers:
-                bucket_measurer.measure_after_scan()
 
-            self.pipeline.run(i)
+def main(figure, nticks):
+    pipeline = Storage()
+    scan = ConfiguredSeqScan(pipeline)
+    prefetcher = ConfiguredSeqScanPrefetcher(scan, pipeline)
+    measurer = TotalMeasurer(pipeline, scan)
+    model = Model(pipeline, scan, prefetcher, measurer)
 
-        submitted_metric = SubmittedMetric(self.submitted_measurer)
-        inflight_metric = InflightMetric(self.inflight_measurer)
-        completed_metric = CompletedMetric(self.completed_measurer)
-        tryconsume_metric = TryConsumeMetric(self.scan_measurer)
-        waited_metric = WaitedMetric(self.scan_measurer)
-        acquired_metric = AcquiredMetric(self.scan_measurer)
+    labeled_metrics = model.run(nticks)
 
-        metrics = [submitted_metric, inflight_metric, completed_metric,
-                tryconsume_metric, waited_metric, acquired_metric]
-
-        self.labeled_metrics = {
-            'submitted': submitted_metric.data,
-            'inflight': inflight_metric.data,
-            'completed': completed_metric.data,
-            'tryconsume': tryconsume_metric.data,
-            'waited': waited_metric.data,
-            'acquired': acquired_metric.data
-        }
-
-    def plot(self, figure):
-        ax = figure.add_subplot()
-        df = pd.DataFrame(self.labeled_metrics)
-
-        df.plot( ax=ax)
+    ax = figure.add_subplot()
+    df = pd.DataFrame(labeled_metrics)
+    df.plot(ax=ax)

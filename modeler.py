@@ -1,7 +1,6 @@
 import time, math
 from dataclasses import dataclass
 import logging
-from config import *
 
 logger = logging.getLogger()
 logger.setLevel('CRITICAL')
@@ -18,7 +17,6 @@ class Bucket:
     def __init__(self):
         self.ios = []
         self.target_bucket = None
-        self.storage = Storage(config['storage'])
 
     def __repr__(self):
         return f"{type(self).__name__}()"
@@ -50,24 +48,9 @@ class Bucket:
                            str(self.target_bucket))
             self.move(io, current_tick)
 
-class SubmittedBucket(Bucket):
-    def latency(self, num_ios):
-        return self.storage.submission_overhead
-
-class InFlightBucket(Bucket):
-    # Latency here is how long an IO will be inflight -- or completion latency
-    def latency(self, num_ios):
-        completion_latency = self.storage.latency(num_ios)
-        logger.warning('num_ios is %s. completion latency is %s.', num_ios,
-                    completion_latency)
-        return completion_latency
-
-class CompletedBucket(Bucket):
-    pass
-
 class Pipeline:
     def __init__(self, buckets):
-        self.buckets = buckets
+        self.buckets = buckets + [Bucket()]
 
         for i in range(len(self.buckets) - 1):
             self.buckets[i].target_bucket = self.buckets[i + 1]
@@ -76,62 +59,80 @@ class Pipeline:
         self.buckets[0].add(item, current_tick)
 
     def dequeue(self, current_tick):
-        for io in self.buckets[-1].ios:
-            if not io.is_expired(current_tick):
-                continue
-            self.buckets[-1].ios.remove(io)
-            return io
+        try:
+            return self.buckets[-1].ios.pop()
+        except IndexError:
+            return None
 
     def run(self, current_tick):
         for bucket in self.buckets:
             bucket.run(current_tick)
 
+
 class Scan:
-    def __init__(self, pipeline, initial_tick=0):
+    def __init__(self, pipeline):
         self.pipeline = pipeline
-        self.consumption_rate = config['run']['consumption_rate']
-        self.last_consumption = initial_tick
-        self.nblocks = config['run']['nblocks']
-        self.submitted = 0
-        self.tried_consumed = False
-        self.acquired_io = None
+        self.nblocks = 0
         self.consumed = 0
-        self.adjustment_algorithm = AdjustmentAlgorithm(config['adjustment_algorithm'])
-        self.storage = Storage(config['storage'])
+        self.acquired_io = None
+        self.tried_consumed = False
+        self.last_consumption = 0
 
-    def should_consume(self, current_tick):
-        if self.last_consumption + self.consumption_rate < current_tick:
-            return False
-        self.last_consumption = current_tick
-        self.tried_consumed = True
-        return True
+    @property
+    def done(self):
+        return self.consumed >= self.nblocks
 
-    def get_io(self, current_tick):
-        self.acquired_io = self.pipeline.dequeue(current_tick)
-        return self.acquired_io
+    def should_consume(self, tick):
+        self.tried_consumed = self.last_consumption + self.consumption_rate < tick
+        if self.tried_consumed:
+            self.last_consumption = tick
+        return self.tried_consumed
 
-    def calc_submit_window(self, completed, inflight):
-        if self.adjustment_algorithm.hit_limit(completed, inflight):
-            return 0
+    def acquire_size(self, tick):
+        return 1 if self.should_consume(tick) else 0
 
-        # Submit the lesser of the number of blocks left in the scan and
-        # min_dispatch
-        batch_size = min(self.nblocks - self.submitted,
-                         self.adjustment_algorithm.min_dispatch)
-
-        return batch_size
-
-    def submit_io(self, current_tick, num_to_submit):
-        while num_to_submit > 0:
-            self.pipeline.enqueue(IO(), current_tick)
-            self.submitted += 1
-            num_to_submit -= 1
-
-    def run(self, current_tick, completed_bucket, inflight_bucket):
-        self.submit_io(current_tick,
-                       self.calc_submit_window(completed_bucket.num_ios,
-                                               inflight_bucket.num_ios))
-
-        if self.should_consume(current_tick):
-            if self.get_io(current_tick):
+    def run(self, tick):
+        acquire_size = self.acquire_size(tick)
+        for i in range(acquire_size):
+            self.acquired_io = self.pipeline.dequeue(tick)
+            if self.acquired_io:
                 self.consumed += 1
+
+class Prefetcher:
+    def __init__(self, scan, pipeline):
+        self.pipeline = pipeline
+        self.scan = scan
+        self.submitted = 0
+
+    def submit_size(self):
+        return 1
+
+    def run(self, tick):
+        submit_size = self.submit_size()
+        for i in range(submit_size):
+            self.pipeline.enqueue(IO(), tick)
+            self.submitted += 1
+
+class Model:
+    def __init__(self, pipeline, scan, prefetcher, measurer):
+        self.pipeline = pipeline
+        self.scan = scan
+        self.measurer = measurer
+        self.prefetcher = prefetcher
+
+    def run(self, total_ticks):
+        for i in range(total_ticks):
+            if self.scan.done:
+                break
+
+            self.measurer.run_before_scan()
+
+            self.scan.run(i)
+
+            self.prefetcher.run(i)
+
+            self.measurer.run_after_scan()
+
+            self.pipeline.run(i)
+
+        return self.measurer.analyze()
