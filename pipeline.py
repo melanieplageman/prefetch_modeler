@@ -1,3 +1,5 @@
+import logging
+
 from model import SubmittedDialBucket, InflightDialBucket, CompletedGateBucket, ConsumedGateBucket, PrefetchedGateBucket
 
 from bucket import GateBucket, IO
@@ -25,7 +27,13 @@ class Pipeline:
 
         self.buckets = buckets
 
-    def run(self, nticks, nblocks):
+    def run(self, nticks, nblocks, log_level=logging.WARNING):
+        logging.basicConfig(filename='prefetch.log', filemode='w',
+                            level=log_level)
+
+        logging.info('Started')
+
+        nticks = max(1, nticks)
         for tick in range(nticks):
             for bucket in self.buckets:
                 bucket.run(tick)
@@ -34,6 +42,8 @@ class Pipeline:
             tick += 1
             for bucket in self.buckets:
                 bucket.run(tick)
+
+        logging.info('Finished')
 
 
     def measure(self, nticks):

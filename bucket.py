@@ -1,5 +1,6 @@
 import collections.abc
 from dataclasses import dataclass
+import logging
 
 @dataclass
 class IO:
@@ -80,7 +81,7 @@ class Bucket:
         self.measurer['want_to_move'] = want_to_move
         self.measurer['num_ios'] = self.num_ios
 
-        print(f'ran {type(self).__name__}. to_move: {len(ios_to_move)}. num ios: {self.num_ios}. want to move: {want_to_move}.')
+        logging.info(f'ran {type(self).__name__}. to_move: {len(ios_to_move)}. num ios: {self.num_ios}. want to move: {want_to_move}.')
 
     @property
     def data(self):
