@@ -38,7 +38,7 @@ class InflightDialBucket(DialBucket):
         if self.num_ios + 1 >= self.MAX_IOPS:
             completion_latency = 10
         completion_latency += (0.01 * self.num_ios)
-        return 1
+        return self.BASE_COMPLETION_LATENCY
 
 class CompletedGateBucket(GateBucket):
     CONSUMPTION_RATE = 1
