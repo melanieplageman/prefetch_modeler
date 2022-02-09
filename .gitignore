@@ -1,0 +1,4 @@
+/venv/
+/.ipynb_checkpoints/
+/prefetch.log
+__pycache__/
