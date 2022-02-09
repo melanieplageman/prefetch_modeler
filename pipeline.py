@@ -7,7 +7,8 @@ from bucket import GateBucket, IO
 class Pipeline:
     def __init__(self, nblocks, completion_target_distance=512, min_dispatch=2,
                  max_inflight=10, submission_overhead=1, max_iops=10,
-                 base_completion_latency=1, consumption_rate=1):
+                 base_completion_latency=1, consumption_rate=1,
+                 consumption_size=1):
 
         self.nblocks_bucket = GateBucket()
         self.submitted_bucket = SubmittedDialBucket()
@@ -28,6 +29,7 @@ class Pipeline:
         self.inflight_bucket.BASE_COMPLETION_LATENCY = base_completion_latency
 
         self.completed_bucket.CONSUMPTION_RATE = consumption_rate
+        self.completed_bucket.CONSUMPTION_SIZE = consumption_size
 
         for i in range(nblocks):
             self.nblocks_bucket.add(IO(), 0)

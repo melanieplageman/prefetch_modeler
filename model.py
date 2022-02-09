@@ -42,6 +42,7 @@ class InflightDialBucket(DialBucket):
 
 class CompletedGateBucket(GateBucket):
     CONSUMPTION_RATE = 1
+    CONSUMPTION_SIZE = 1
 
     last_consumption = 0
 
@@ -49,7 +50,7 @@ class CompletedGateBucket(GateBucket):
         try_consume = tick >= self.last_consumption + self.CONSUMPTION_RATE
         if try_consume:
             self.last_consumption = tick
-            return self.CONSUMPTION_RATE
+            return self.CONSUMPTION_SIZE
 
         return 0
 
