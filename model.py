@@ -49,7 +49,7 @@ class CompletedGateBucket(GateBucket):
         try_consume = tick >= self.last_consumption + self.CONSUMPTION_RATE
         if try_consume:
             self.last_consumption = tick
-            return 1
+            return self.CONSUMPTION_RATE
 
         return 0
 
