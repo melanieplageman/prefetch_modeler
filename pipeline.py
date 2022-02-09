@@ -5,7 +5,10 @@ from model import SubmittedDialBucket, InflightDialBucket, CompletedGateBucket, 
 from bucket import GateBucket, IO
 
 class Pipeline:
-    def __init__(self, nblocks):
+    def __init__(self, nblocks, completion_target_distance=512, min_dispatch=2,
+                 max_inflight=10, submission_overhead=1, max_iops=10,
+                 base_completion_latency=1, consumption_rate=1):
+
         self.nblocks_bucket = GateBucket()
         self.submitted_bucket = SubmittedDialBucket()
         self.inflight_bucket = InflightDialBucket()
@@ -14,6 +17,17 @@ class Pipeline:
 
         self.prefetched_bucket = PrefetchedGateBucket(
             self.completed_bucket, self.inflight_bucket)
+
+        self.prefetched_bucket.completion_target_distance = completion_target_distance
+        self.prefetched_bucket.min_dispatch = min_dispatch
+        self.prefetched_bucket.max_inflight = max_inflight
+
+        self.submitted_bucket.SUBMISSION_OVERHEAD = submission_overhead
+
+        self.inflight_bucket.MAX_IOPS = max_iops
+        self.inflight_bucket.BASE_COMPLETION_LATENCY = base_completion_latency
+
+        self.completed_bucket.CONSUMPTION_RATE = consumption_rate
 
         for i in range(nblocks):
             self.nblocks_bucket.add(IO(), 0)
