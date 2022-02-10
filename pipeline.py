@@ -5,10 +5,10 @@ from model import SubmittedDialBucket, InflightDialBucket, CompletedGateBucket, 
 from bucket import GateBucket, IO
 
 class Pipeline:
-    def __init__(self, nblocks, completion_target_distance=512, min_dispatch=2,
-                 max_inflight=10, submission_overhead=1, max_iops=10,
-                 base_completion_latency=1, consumption_rate=1,
-                 consumption_size=1):
+    def __init__(self, nblocks, completion_target_distance, min_dispatch,
+                 max_inflight, submission_overhead, max_iops,
+                 base_completion_latency, consumption_rate,
+                 consumption_size):
 
         self.nblocks_bucket = GateBucket()
         self.submitted_bucket = SubmittedDialBucket()
@@ -43,7 +43,7 @@ class Pipeline:
 
         self.buckets = buckets
 
-    def run(self, nticks, nblocks, log_level=logging.WARNING):
+    def run(self, nticks, nblocks, log_level=logging.INFO):
         logging.basicConfig(filename='prefetch.log', filemode='w',
                             level=log_level)
 
