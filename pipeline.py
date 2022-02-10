@@ -47,15 +47,14 @@ class Pipeline:
         logging.basicConfig(filename='prefetch.log', filemode='w',
                             level=log_level)
 
+        # TODO: add time mode and size mode
         logging.info('Started')
+        if nticks < 2 or nblocks < 2:
+            raise ValueError('nticks and nblocks must be > 2 to gather enough results to chart.')
 
-        nticks = max(1, nticks)
         for tick in range(nticks):
-            for bucket in self.buckets:
-                bucket.run(tick)
-
-        while self.consumed_bucket.num_ios < nblocks:
-            tick += 1
+            if self.consumed_bucket.num_ios >= nblocks:
+                break
             for bucket in self.buckets:
                 bucket.run(tick)
 
