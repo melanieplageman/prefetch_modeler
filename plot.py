@@ -21,6 +21,8 @@ def single_plot(df):
 
     host.plot(df['inflight'], label='Inflight')
     host.plot(df['completed'], label='Completed')
+    host.plot(df['completion_target_distance'], label='Completion Target Distance')
+    host.plot(df['max_inflight'], label='Max Inflight')
 
     p3, = consumed_ax.plot(df['consumed'], label='Consumed')
 
