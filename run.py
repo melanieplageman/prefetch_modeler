@@ -72,8 +72,7 @@ def try_algos(algo):
 
     to_plot = pd.DataFrame(index=data.index)
     to_plot['wait'] = data.apply(lambda record:
-        record['completed_want_to_move'] > record['completed_num_ios'] +
-                                 record['completed_to_move'], axis='columns')
+        record['completed_want_to_move'] > record['completed_to_move'], axis='columns')
     to_plot['completed'] = data['completed_num_ios']
     to_plot['inflight'] = data['inflight_num_ios']
     to_plot['consumed'] = data['consumed_num_ios']
