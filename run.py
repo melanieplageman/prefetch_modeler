@@ -31,7 +31,7 @@ def algo1(self):
         return 0
 
     # TODO: what would be good logic for inc/dec max_inflight?
-    if inflight < 0.9 * self.max_inflight:
+    if inflight >= 0.9 * self.max_inflight:
         desired_max_inflight = self.max_inflight + 1
         self.max_inflight = min(desired_max_inflight, self.inflight_cap)
 
@@ -44,6 +44,9 @@ def algo1(self):
                                               self.completed_cap)
 
     target_inflight = self.completion_target_distance - inflight - completed
+    # Don't submit less than self.min_dispatch
+    # This shouldn't exceed limits on completed or inflight due to boundary
+    # checking above.
     target_inflight = max(self.min_dispatch, target_inflight)
     to_submit = min(self.max_inflight - inflight, target_inflight)
     print(f"[{self.tick}] target dist: {self.completion_target_distance}, inflight: {inflight}, completed: {completed}, submitting: {to_submit}")
