@@ -17,16 +17,17 @@ def algo1(self):
     # for that when calculating whether or not we can submit more here given
     # the inflight cap and completion latency
 
-    # If we are hitting our soft cap for inflight requests, don't submit now
+    # If dispatching more would cause us to hit our soft cap for inflight
+    # requests, don't submit now
     # TODO: consider decreasing max_inflight
     # TODO: set a variable indicating that this has happened
-    if inflight >= self.max_inflight:
+    if inflight >= self.max_inflight - self.min_dispatch:
         return 0
 
     # If there are enough completed requests, don't submit any more
     # Since we may have overshot,
     # TODO: consider decreasing completion_target_distance
-    if completed >= self.completion_target_distance - self.min_dispatch:
+    if completed + inflight + self.min_dispatch >= self.completion_target_distance:
         return 0
 
     # TODO: what would be good logic for inc/dec max_inflight?
@@ -42,10 +43,11 @@ def algo1(self):
         self.completion_target_distance = min(desired_completion_target_distance,
                                               self.completed_cap)
 
-    # TODO: some kind of boundary checking to ensure that our dispatch size
-    # doesn't cause us to exceed our completed or inflight caps
-    return self.min_dispatch
-
+    target_inflight = self.completion_target_distance - inflight - completed
+    target_inflight = max(self.min_dispatch, target_inflight)
+    to_submit = min(self.max_inflight - inflight, target_inflight)
+    print(f"[{self.tick}] target dist: {self.completion_target_distance}, inflight: {inflight}, completed: {completed}, submitting: {to_submit}")
+    return to_submit
 
 def try_algos(algo):
     pipeline = PipelineConfiguration(
