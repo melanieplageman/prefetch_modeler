@@ -21,9 +21,12 @@ class PipelineConfiguration:
         pipeline = TestPipeline(*args, **kwargs)
 
         pipeline.prefetched_bucket.inflight_cap = self.inflight_cap
+
         pipeline.submitted_bucket.LATENCY = self.submission_overhead
+
         pipeline.inflight_bucket.MAX_IOPS = self.max_iops
-        pipeline.inflight_bucket.base_completion_latency = self.base_completion_latency
+        pipeline.inflight_bucket.BASE_COMPLETION_LATENCY = self.base_completion_latency
+
         pipeline.completed_bucket.CONSUMPTION_RATE = self.consumption_rate
         pipeline.completed_bucket.CONSUMPTION_SIZE = self.consumption_size
 
@@ -31,17 +34,18 @@ class PipelineConfiguration:
         pipeline.prefetched_bucket.completed_cap = self.completed_cap
 
         if self.completion_target_distance > self.completed_cap:
-            print(f'Cannot set completion_target_distance to {self.completion_target_distance}. Setting instead to completed_cap {self.completed_cap}.')
-            pipeline.prefetched_bucket.completion_target_distance = self.completed_cap
-        else:
-            pipeline.prefetched_bucket.completion_target_distance = self.completion_target_distance
+            raise ValueError(f'Value {self.completion_target_distance} for '
+                             f'completion_target_distance exceeds completed_cap '
+                             f'value of {self.completed_cap}.')
+
+        pipeline.prefetched_bucket.completion_target_distance = self.completion_target_distance
 
         pipeline.prefetched_bucket.min_dispatch = self.min_dispatch
 
         if self.max_inflight > self.inflight_cap:
-            print(f'Cannot set max_inflight to {self.max_inflight}. Setting instead to inflight_cap {self.inflight_cap}.')
-            pipeline.prefetched_bucket.max_inflight = self.inflight_cap
-        else:
-            pipeline.prefetched_bucket.max_inflight = self.max_inflight
+            raise ValueError(f'Value {self.max_inflight} for max_inflight '
+                             f'exceeds inflight_cap of {self.inflight_cap}.')
+
+        pipeline.prefetched_bucket.max_inflight = self.max_inflight
 
         return pipeline
