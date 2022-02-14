@@ -10,7 +10,7 @@ class TestPipeline(Pipeline):
         self.consumed_bucket = StopBucket("consumed")
 
         self.prefetched_bucket = PrefetchedGateBucket(
-            "prefetched", self.completed_bucket, self.inflight_bucket)
+            "prefetched", self)
 
         super().__init__(self.intake, self.prefetched_bucket,
                          self.submitted_bucket, self.inflight_bucket,
@@ -18,10 +18,9 @@ class TestPipeline(Pipeline):
 
 
 class PrefetchedGateBucket(GateBucket):
-    def __init__(self, name, completed_bucket, inflight_bucket):
+    def __init__(self, name, pipeline):
         super().__init__(name)
-        self.completed_bucket = completed_bucket
-        self.inflight_bucket = inflight_bucket
+        self.pipeline = pipeline
 
         self.inflight_cap = 10000
         self.completed_cap = 10000

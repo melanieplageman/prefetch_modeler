@@ -10,8 +10,19 @@ from plot import single_plot
 
 
 def algo1(self):
-    inflight = len(self.inflight_bucket)
-    completed = len(self.completed_bucket)
+    intake = len(self.pipeline.intake)
+    prefetched = len(self.pipeline.prefetched_bucket)
+    submitted = len(self.pipeline.submitted_bucket)
+    inflight = len(self.pipeline.inflight_bucket)
+    completed = len(self.pipeline.completed_bucket)
+    consumed = len(self.pipeline.consumed_bucket)
+    print(f'intake: {intake}, '
+          f'prefetched: {prefetched}, '
+          f'submitted: {submitted}, '
+          f'inflight: {inflight}, '
+          f'completed: {completed}, '
+          f'consumed: {consumed}.'
+          )
 
     # TODO: if submission overhead is sufficiently high, we may need to account
     # for that when calculating whether or not we can submit more here given
