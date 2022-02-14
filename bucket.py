@@ -49,6 +49,8 @@ class Bucket(collections.abc.MutableSet):
         self.source = set()
         self.target = self
 
+        self.counter = 0
+
         self._tick = None
 
         self._data = []
@@ -67,6 +69,7 @@ class Bucket(collections.abc.MutableSet):
         return len(self.source)
 
     def add(self, io):
+        self.counter += 1
         self.source.add(io)
 
     def discard(self, io):
