@@ -1,107 +1,168 @@
 import collections.abc
 from dataclasses import dataclass
-import logging
+import itertools
+import pandas as pd
 
-@dataclass
-class IO:
-    expiry: int = 0
 
-    def is_expired(self, current_tick):
-        return self.expiry <= current_tick
+class IO: pass
 
-class Measurer(collections.abc.MutableMapping):
-    def __init__(self):
-        self._tick_data = None
-        self._data = []
 
-    def __getitem__(self, metric):
-        return self._tick_data[metric]
+class Pipeline:
+    def __init__(self, *args):
+        self.buckets = list(args)
 
-    def __setitem__(self, metric, number):
-        self._tick_data[metric] = number
-
-    def __delitem__(self, metric):
-        del self._tick_data[metric]
-
-    def __iter__(self):
-        return iter(self._tick_data)
-
-    def __len__(self):
-        return len(self._tick_data)
+        for i in range(len(self.buckets) - 1):
+            self.buckets[i].target = self.buckets[i + 1]
 
     @property
     def data(self):
-        return self._data + [self._tick_data]
+        """Return the tick joined data of each bucket in the pipeline."""
+        data = self.buckets[0].data.add_prefix(self.buckets[0].name)
+        for bucket in self.buckets[1:]:
+            data = data.join(bucket.data.add_prefix(f"{bucket.name}_"))
+        return data
 
-    def next_tick(self, tick):
-        if self._tick_data is not None:
-            self._data.append(self._tick_data)
-        self._tick_data = {'tick': tick}
+    def run(self, volume, duration=None):
+        for i in range(volume):
+            self.buckets[0].add(IO())
+
+        # Create an inifite series if duration is None
+        timeline = range(duration) if duration else itertools.count()
+
+        for tick in timeline:
+            if len(self.buckets[-1]) == volume:
+                break
+
+            for bucket in self.buckets:
+                bucket.tick = tick
+
+            for bucket in self.buckets:
+                bucket.run()
+
+        return self.data
 
 
-class Bucket:
-    def __init__(self):
-        self.measurer = Measurer()
-        self.ios = []
-        self.target_bucket = None
+class Bucket(collections.abc.MutableSet):
+    def __init__(self, name):
+        self.name = name
+
+        self.source = set()
+        self.target = self
+
+        self._tick = None
+
+        self._data = []
+        self.tick_data = None
 
     def __repr__(self):
-        return f"{type(self).__name__}()"
+        return f"{type(self).__name__}({self.name!r})"
+
+    def __contains__(self, io):
+        return io in self.source
+
+    def __iter__(self):
+        return iter(self.source)
+
+    def __len__(self):
+        return len(self.source)
+
+    def add(self, io):
+        self.source.add(io)
+
+    def discard(self, io):
+        self.source.discard(io)
 
     @property
-    def num_ios(self):
-        return len(self.ios)
+    def tick(self):
+        return self._tick
 
-    def latency(self):
-        return 0
-
-    def desired_move_size(self, tick):
-        return self.num_ios
-
-    def add(self, io, tick):
-        io.expiry = tick + self.latency()
-        self.ios.append(io)
-
-    def move_many(self, ios_to_move, tick):
-        for io in ios_to_move:
-            self.add(io, tick)
-
-    def split_to_move(self, want_to_move, tick):
-        return []
-
-    def run(self, tick):
-        want_to_move = self.desired_move_size(tick)
-        ios_to_move = self.split_to_move(want_to_move, tick)
-
-        if self.target_bucket:
-            self.target_bucket.move_many(ios_to_move, tick)
-
-        self.measurer.next_tick(tick)
-        self.measurer['to_move'] = len(ios_to_move)
-        self.measurer['want_to_move'] = want_to_move
-        self.measurer['num_ios'] = self.num_ios
-
-        logging.info(f'ran {type(self).__name__}. to_move: {len(ios_to_move)}. num ios: {self.num_ios}. want to move: {want_to_move}.')
+    @tick.setter
+    def tick(self, tick):
+        self._tick = tick
+        if self.tick_data is not None:
+            self._data.append(self.tick_data)
+        self.tick_data = {'tick': tick}
 
     @property
     def data(self):
-        return self.measurer.data
+        return pd.DataFrame(self._data + [self.tick_data]).set_index('tick')
+
+    def to_move(self):
+        raise NotImplementedError()
+
+    def run(self):
+        self.tick_data['num_ios'] = len(self)
+
+        to_move = self.to_move()
+        self.tick_data['to_move'] = len(to_move)
+
+        for io in to_move:
+            self.remove(io)
+            self.target.add(io)
+
 
 class GateBucket(Bucket):
-    def split_to_move(self, want_to_move, tick):
-        to_move = min(self.num_ios, want_to_move)
-        ios_to_move = self.ios[0:to_move]
-        del self.ios[0:to_move]
-        return ios_to_move
+    """A bucket that will move a specified number of IOs."""
+
+    MOVEMENT_SIZE = None
+
+    def wanted_move_size(self):
+        """The number of IOs to move on this tick."""
+
+        if self.MOVEMENT_SIZE is not None:
+            return self.MOVEMENT_SIZE
+        raise NotImplementedError()
+
+    def to_move(self):
+        size = self.wanted_move_size()
+        self.tick_data['want_to_move'] = size
+        return frozenset(itertools.islice(self.source, size))
+
+
+class FlipFlopGateBucket(GateBucket):
+    """A bucket will either move a specified number of IOs or none of them."""
+
+    def is_on(self):
+        raise NotImplementedError()
+
+    def wanted_move_size(self):
+        return self.wanted_move_size() if self.is_on() else 0
+
 
 class DialBucket(Bucket):
-    def split_to_move(self, want_to_move, tick):
-        ios_to_move = []
+    """A bucket that will retain each IO for a specified amount of time."""
 
-        for io in self.ios:
-            if not io.is_expired(tick):
-                continue
-            self.ios.remove(io)
-            ios_to_move.append(io)
+    LATENCY = None
 
-        return ios_to_move
+    def add(self, io):
+        # In case self.tick is None
+        io.move_at = (self.tick or 0) + self.latency()
+        super().add(io)
+
+    def discard(self, io):
+        del io.move_at
+        super().discard(io)
+
+    def latency(self):
+        """The amount of time that an IO should be retained in this bucket."""
+
+        if self.LATENCY is not None:
+            return self.LATENCY
+        raise NotImplementedError()
+
+    def to_move(self):
+        return frozenset(io for io in self.source if io.move_at <= self.tick)
+
+
+class IntakeBucket(Bucket):
+    """A bucket that will move each IO on each tick."""
+
+    def to_move(self):
+        return frozenset(self.source)
+
+
+class StopBucket(Bucket):
+    """An immobile bucket."""
+
+    def to_move(self):
+        return frozenset()
