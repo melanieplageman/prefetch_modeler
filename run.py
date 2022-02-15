@@ -84,6 +84,12 @@ def try_algos(algo):
     to_plot = pd.DataFrame(index=data.index)
     to_plot['wait'] = data.apply(lambda record:
         record['completed_want_to_move'] > record['completed_to_move'], axis='columns')
+
+    last_wait = 0
+    for i in range(len(to_plot['wait'])):
+        last_wait = last_wait + 1 if to_plot['wait'][i] else 0
+        to_plot['wait'][i] = last_wait
+
     to_plot['completed'] = data['completed_num_ios']
     to_plot['inflight'] = data['inflight_num_ios']
     to_plot['consumed'] = data['consumed_num_ios']
