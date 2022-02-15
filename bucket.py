@@ -99,6 +99,8 @@ class Bucket(collections.abc.MutableSet):
         to_move = self.to_move()
         self.tick_data['to_move'] = len(to_move)
 
+        if len(to_move):
+            print(f'{self.tick}: moving {len(to_move)} IOs from {self} to {self.target}')
         for io in to_move:
             self.remove(io)
             self.target.add(io)
