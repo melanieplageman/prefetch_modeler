@@ -63,23 +63,23 @@ def algo1(self):
     print(f"[{self.tick}] target dist: {self.completion_target_distance}, inflight: {inflight}, completed: {completed}, submitting: {to_submit}")
     return to_submit
 
+# For now, you must specify whole numbers for Duration and Rate
 def try_algos(algo):
-    pipeline = PipelineConfiguration(
-        inflight_cap=1000,
-        submission_overhead=1,
-        max_iops=10000,
-        base_completion_latency=1,
-        consumption_rate=2,
-        consumption_size=1,
+    config = PipelineConfiguration(
+        inflight_cap=100,
+        submission_overhead=Duration(microseconds=10),
+        max_iops=100,
+        base_completion_latency=Duration(microseconds=400),
+        consumption_rate=Rate(per_second=50000),
         prefetch_distance_algorithm=algo1,
-        completed_cap=20,
+        completed_cap=200,
         completion_target_distance=15,
         min_dispatch=2,
-        max_inflight=25,
-    ).generate_pipeline()
+        max_inflight=10,
+    )
+    pipeline = config.generate_pipeline()
 
-    # data = pipeline.run(volume=1000, duration=1000)
-    data = pipeline.run(volume=1000)
+    data = pipeline.run(volume=100, duration=Duration(seconds=2))
 
     to_plot = pd.DataFrame(index=data.index)
     to_plot['wait'] = data.apply(lambda record:

@@ -55,12 +55,12 @@ class PrefetchedGateBucket(GateBucket):
 
 
 class SubmittedDialBucket(DialBucket):
-    LATENCY = 0.1
+    LATENCY = 1
 
 
 class InflightDialBucket(DialBucket):
     MAX_IOPS = 10000
-    BASE_COMPLETION_LATENCY = 1.2
+    BASE_COMPLETION_LATENCY = 1
 
     def latency(self):
         # TODO: make this formula better
@@ -72,11 +72,37 @@ class InflightDialBucket(DialBucket):
 
 
 class CompletedGateBucket(GateBucket):
-    CONSUMPTION_RATE = 1
-    CONSUMPTION_SIZE = 1
+    def __init__(self, name):
+        super().__init__(name)
+        self.consumption_rate = 1
+
+    @property
+    def consumption_rate(self):
+        return self._consumption_rate
+
+    @consumption_rate.setter
+    def consumption_rate(self, rate):
+        self._consumption_rate = rate
+        if self._consumption_rate < 1:
+            self.consumption_interval = int(1 / self._consumption_rate)
+            self.consumption_size = 1
+            self.next_consumption = (self.tick or 0) + self.consumption_interval
+        else:
+            self.consumption_interval = 1
+            self.consumption_size = int(self._consumption_rate)
+            self.next_consumption = (self.tick or 0) + 0
+
+    def next_action(self):
+        return self.next_consumption
 
     def wanted_move_size(self):
-        if not self.tick % self.CONSUMPTION_RATE:
-            return self.CONSUMPTION_SIZE
+        print(self.consumption_rate)
+        if self.tick != self.next_consumption:
+            return 0
 
-        return 0
+        if len(self.source) == 0 and self.consumption_rate < 1:
+            self.next_consumption += 1
+        else:
+            self.next_consumption += self.consumption_interval
+
+        return self.consumption_size

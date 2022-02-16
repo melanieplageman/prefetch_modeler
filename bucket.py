@@ -2,6 +2,7 @@ import collections.abc
 from dataclasses import dataclass
 import itertools
 import pandas as pd
+import math
 
 
 class IO: pass
@@ -26,21 +27,24 @@ class Pipeline:
         for i in range(volume):
             self.buckets[0].add(IO())
 
-        # Create an inifite series if duration is None
-        timeline = range(duration) if duration else itertools.count()
-
-        for tick in timeline:
-            if len(self.buckets[-1]) == volume:
-                break
-
+        duration = duration.total
+        next_tick = 0
+        while True:
             for bucket in self.buckets:
-                bucket.tick = tick
+                bucket.tick = next_tick
 
             for bucket in self.buckets:
                 bucket.run()
 
-        return self.data
+            if len(self.buckets[-1]) == volume:
+                break
 
+            next_tick = min([bucket.next_action() for bucket in self.buckets])
+
+            if duration and next_tick > duration:
+                break
+
+        return self.data
 
 class Bucket(collections.abc.MutableSet):
     def __init__(self, name):
@@ -92,6 +96,9 @@ class Bucket(collections.abc.MutableSet):
 
     def to_move(self):
         raise NotImplementedError()
+
+    def next_action(self):
+        return math.inf
 
     def run(self):
         self.tick_data['num_ios'] = len(self)
@@ -155,12 +162,20 @@ class DialBucket(Bucket):
             return self.LATENCY
         raise NotImplementedError()
 
+    def next_action(self):
+        if not self.source:
+            return self.tick + 1
+        return min(io.move_at for io in self.source if io.move_at)
+
     def to_move(self):
         return frozenset(io for io in self.source if io.move_at <= self.tick)
 
 
 class IntakeBucket(Bucket):
     """A bucket that will move each IO on each tick."""
+
+    def next_action(self):
+        return self.tick + 1 if len(self.source) else math.inf
 
     def to_move(self):
         return frozenset(self.source)
