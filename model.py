@@ -96,7 +96,6 @@ class CompletedGateBucket(GateBucket):
         return self.next_consumption
 
     def wanted_move_size(self):
-        print(self.consumption_rate)
         if self.tick != self.next_consumption:
             return 0
 

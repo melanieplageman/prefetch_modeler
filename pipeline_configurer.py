@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Callable
 from model import TestPipeline
 from fractions import Fraction
@@ -6,6 +6,9 @@ from fractions import Fraction
 class Duration:
     def __init__(self, microseconds=0, milliseconds=0, seconds=0):
         self.total = microseconds + (milliseconds * 1000) + (seconds * 1000 * 1000)
+
+    def __str__(self):
+        return str(self.total)
 
 class Rate:
     def __init__(self, per_microsecond=0, per_millisecond=0, per_second=0):
@@ -28,6 +31,9 @@ class Rate:
             if self.value.denominator != 1 and self.value.numerator != 1:
                 raise ValueError(f"per_second={per_second} must be divisible by 1,000,000")
 
+    # TODO: make this not just print the fraction but the original value/unit
+    def __str__(self):
+        return str(self.value)
 
 @dataclass(frozen=True)
 class PipelineConfiguration:
@@ -41,6 +47,9 @@ class PipelineConfiguration:
     completion_target_distance: int
     min_dispatch: int
     max_inflight: int
+
+    def __str__(self):
+        return '\n'.join(f'{k}: {str(v)}' for k, v in asdict(self).items())
 
     def generate_pipeline(self, *args, **kwargs):
         pipeline = TestPipeline()

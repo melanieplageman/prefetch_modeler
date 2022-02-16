@@ -77,11 +77,13 @@ def try_algos(algo):
         min_dispatch=2,
         max_inflight=10,
     )
+    print(config)
     pipeline = config.generate_pipeline()
 
     data = pipeline.run(volume=100, duration=Duration(seconds=2))
 
     to_plot = pd.DataFrame(index=data.index)
+
     to_plot['wait'] = data.apply(lambda record:
         record['completed_want_to_move'] > record['completed_to_move'], axis='columns')
 
