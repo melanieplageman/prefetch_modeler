@@ -35,18 +35,21 @@ class Rate:
     def __str__(self):
         return str(self.value)
 
+@dataclass
+class PrefetchConfiguration:
+    inflight_cap: int = 100
+    completed_cap: int = 200
+    min_dispatch: int = 10
+    initial_completion_target_distance: int = 12
+    initial_max_inflight: int = 10
+
 @dataclass(frozen=True)
 class PipelineConfiguration:
-    inflight_cap: int
+    prefetch_configuration: PrefetchConfiguration
     submission_overhead: Duration
     max_iops: int
     base_completion_latency: Duration
     consumption_rate: Rate
-    prefetch_distance_algorithm: Callable
-    completed_cap: int
-    completion_target_distance: int
-    min_dispatch: int
-    max_inflight: int
 
     def __str__(self):
         return '\n'.join(f'{k}: {str(v)}' for k, v in asdict(self).items())
@@ -54,7 +57,6 @@ class PipelineConfiguration:
     def generate_pipeline(self, *args, **kwargs):
         pipeline = TestPipeline()
 
-        pipeline.prefetched_bucket.inflight_cap = self.inflight_cap
 
         pipeline.submitted_bucket.LATENCY = self.submission_overhead.total
 
@@ -63,22 +65,22 @@ class PipelineConfiguration:
 
         pipeline.completed_bucket.consumption_rate = self.consumption_rate.value
 
-        pipeline.prefetched_bucket.desired_move_size_override = self.prefetch_distance_algorithm
-        pipeline.prefetched_bucket.completed_cap = self.completed_cap
+        pipeline.prefetched_bucket.inflight_cap = self.prefetch_configuration.inflight_cap
+        pipeline.prefetched_bucket.completed_cap = self.prefetch_configuration.completed_cap
+        pipeline.prefetched_bucket.min_dispatch = self.prefetch_configuration.min_dispatch
 
-        if self.completion_target_distance > self.completed_cap:
+        if self.prefetch_configuration.initial_completion_target_distance > self.prefetch_configuration.completed_cap:
             raise ValueError(f'Value {self.completion_target_distance} for '
                              f'completion_target_distance exceeds completed_cap '
                              f'value of {self.completed_cap}.')
 
-        pipeline.prefetched_bucket.completion_target_distance = self.completion_target_distance
+        pipeline.prefetched_bucket.completion_target_distance = self.prefetch_configuration.initial_completion_target_distance
 
-        pipeline.prefetched_bucket.min_dispatch = self.min_dispatch
 
-        if self.max_inflight > self.inflight_cap:
+        if self.prefetch_configuration.initial_max_inflight > self.prefetch_configuration.inflight_cap:
             raise ValueError(f'Value {self.max_inflight} for max_inflight '
                              f'exceeds inflight_cap of {self.inflight_cap}.')
 
-        pipeline.prefetched_bucket.max_inflight = self.max_inflight
+        pipeline.prefetched_bucket.max_inflight = self.prefetch_configuration.initial_max_inflight
 
         return pipeline

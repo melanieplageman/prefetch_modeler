@@ -1,14 +1,18 @@
 import pandas as pd
-from pipeline_configurer import *
+from configurer import *
 from model import *
 from bucket import *
 from plot import single_plot
+from override import override, AlgorithmCollection
 
 # TODO: at IO completion, issue more if previously limited by max_inflight
 
 # TODO: add minimums for completion_target_distance, max_inflight, min_dispatch
 
 
+prefetch_desired_move_size_algos = AlgorithmCollection()
+
+@prefetch_desired_move_size_algos.algorithm
 def algo1(self):
     intake = len(self.pipeline.intake)
     prefetched = len(self.pipeline.prefetched_bucket)
@@ -63,41 +67,49 @@ def algo1(self):
     print(f"[{self.tick}] target dist: {self.completion_target_distance}, inflight: {inflight}, completed: {completed}, submitting: {to_submit}")
     return to_submit
 
+@prefetch_desired_move_size_algos.algorithm
+def algo2(self):
+    return 3
+
+prefetch_configs = [
+    PrefetchConfiguration(inflight_cap=100,
+                          completed_cap=200,
+                          min_dispatch=2,
+                          initial_completion_target_distance=15,
+                          initial_max_inflight=10,),
+]
+
 # For now, you must specify whole numbers for Duration and Rate
-def try_algos(algo):
-    config = PipelineConfiguration(
-        inflight_cap=100,
-        submission_overhead=Duration(microseconds=10),
-        max_iops=100,
-        base_completion_latency=Duration(microseconds=400),
-        consumption_rate=Rate(per_second=50000),
-        prefetch_distance_algorithm=algo1,
-        completed_cap=200,
-        completion_target_distance=15,
-        min_dispatch=2,
-        max_inflight=10,
-    )
-    print(config)
-    pipeline = config.generate_pipeline()
+for algo in prefetch_desired_move_size_algos:
+    for config in prefetch_configs:
+        wanted_move_size = override('PrefetchGateBucket.wanted_move_size')(algo)
+        print(f'Algorithm: {wanted_move_size.__name__}')
+        config = PipelineConfiguration(
+            prefetch_configuration=config,
+            submission_overhead=Duration(microseconds=10),
+            max_iops=100,
+            base_completion_latency=Duration(microseconds=400),
+            consumption_rate=Rate(per_second=50000),
+        )
+        print(config)
+        pipeline = config.generate_pipeline()
 
-    data = pipeline.run(volume=100, duration=Duration(seconds=2))
+        data = pipeline.run(volume=100, duration=Duration(seconds=2))
 
-    to_plot = pd.DataFrame(index=data.index)
+        to_plot = pd.DataFrame(index=data.index)
 
-    to_plot['wait'] = data.apply(lambda record:
-        record['completed_want_to_move'] > record['completed_to_move'], axis='columns')
+        to_plot['wait'] = data.apply(lambda record:
+            record['completed_want_to_move'] > record['completed_to_move'], axis='columns')
 
-    last_wait = 0
-    for i in range(len(to_plot['wait'])):
-        last_wait = last_wait + 1 if to_plot['wait'][i] else 0
-        to_plot['wait'][i] = last_wait
+        last_wait = 0
+        for i in range(len(to_plot['wait'])):
+            last_wait = last_wait + 1 if to_plot['wait'][i] else 0
+            to_plot['wait'][i] = last_wait
 
-    to_plot['completed'] = data['completed_num_ios']
-    to_plot['inflight'] = data['inflight_num_ios']
-    to_plot['consumed'] = data['consumed_num_ios']
-    to_plot['completion_target_distance'] = data['prefetched_completion_target_distance']
-    to_plot['max_inflight'] = data['prefetched_max_inflight']
+        to_plot['completed'] = data['completed_num_ios']
+        to_plot['inflight'] = data['inflight_num_ios']
+        to_plot['consumed'] = data['consumed_num_ios']
+        to_plot['completion_target_distance'] = data['prefetched_completion_target_distance']
+        to_plot['max_inflight'] = data['prefetched_max_inflight']
 
-    single_plot(to_plot)
-
-try_algos(algo1)
+        single_plot(to_plot)

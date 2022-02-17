@@ -1,5 +1,5 @@
 from bucket import Pipeline, GateBucket, DialBucket, IntakeBucket, StopBucket
-
+from override import overrideable
 
 class TestPipeline(Pipeline):
     def __init__(self):
@@ -30,14 +30,10 @@ class PrefetchedGateBucket(GateBucket):
         self.min_dispatch = 2
         self.max_inflight = 10
 
-        self.desired_move_size_override = None
-
+    @overrideable('PrefetchGateBucket.wanted_move_size')
     def wanted_move_size(self):
-        if self.desired_move_size_override is not None:
-            return self.desired_move_size_override(self)
-
-        inflight = len(self.inflight_bucket)
-        completed = len(self.completed_bucket)
+        inflight = len(self.pipeline.inflight_bucket)
+        completed = len(self.pipeline.completed_bucket)
 
         if inflight >= self.max_inflight:
             return 0
