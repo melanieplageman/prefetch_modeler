@@ -9,28 +9,32 @@ from override import override, AlgorithmCollection
 
 # TODO: add minimums for completion_target_distance, max_inflight, min_dispatch
 
+def algo_logger(prefetch_bucket):
+    d = {}
+    d['submitting in prog'] = len(prefetch_bucket.pipeline.submitted_bucket)
+    d['submitted'] = prefetch_bucket.pipeline.submitted_bucket.counter
+    d['inflight'] = len(prefetch_bucket.pipeline.inflight_bucket)
+    d['completed_but_not_consumed'] = len(prefetch_bucket.pipeline.completed_bucket)
+    d['consumed'] = len(prefetch_bucket.pipeline.consumed_bucket)
+
+    log_str = f"[{prefetch_bucket.tick}]:"
+    for k, v in d.items():
+        log_str += f'{k}: {v}, '
+
+    return log_str
+
+LOG_PREFETCH = False
 
 prefetch_desired_move_size_algos = AlgorithmCollection()
 
 @prefetch_desired_move_size_algos.algorithm
 def algo1(self):
-    intake = len(self.pipeline.intake)
-    prefetched = len(self.pipeline.prefetched_bucket)
-    submitted = len(self.pipeline.submitted_bucket)
-    inflight = len(self.pipeline.inflight_bucket)
-    completed = len(self.pipeline.completed_bucket)
-    consumed = len(self.pipeline.consumed_bucket)
-    print(f'intake: {intake}, '
-          f'prefetched: {prefetched}, '
-          f'submitted: {submitted}, '
-          f'inflight: {inflight}, '
-          f'completed: {completed}, '
-          f'consumed: {consumed}.'
-          )
 
     # TODO: if submission overhead is sufficiently high, we may need to account
     # for that when calculating whether or not we can submit more here given
     # the inflight cap and completion latency
+    inflight = len(self.pipeline.inflight_bucket)
+    completed = len(self.pipeline.completed_bucket)
 
     # If dispatching more would cause us to hit our soft cap for inflight
     # requests, don't submit now
@@ -64,7 +68,8 @@ def algo1(self):
     # checking above.
     target_inflight = max(self.min_dispatch, target_inflight)
     to_submit = min(self.max_inflight - inflight, target_inflight)
-    print(f"[{self.tick}] target dist: {self.completion_target_distance}, inflight: {inflight}, completed: {completed}, submitting: {to_submit}")
+    if LOG_PREFETCH:
+        print('Post Adjustment:\n' + algo_logger(self))
     return to_submit
 
 @prefetch_desired_move_size_algos.algorithm

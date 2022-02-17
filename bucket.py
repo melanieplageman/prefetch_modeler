@@ -4,6 +4,7 @@ import itertools
 import pandas as pd
 import math
 
+LOG_BUCKETS = False
 
 class IO: pass
 
@@ -106,7 +107,7 @@ class Bucket(collections.abc.MutableSet):
         to_move = self.to_move()
         self.tick_data['to_move'] = len(to_move)
 
-        if len(to_move):
+        if len(to_move) and LOG_BUCKETS:
             print(f'{self.tick}: moving {len(to_move)} IOs from {self} to {self.target}')
         for io in to_move:
             self.remove(io)
