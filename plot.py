@@ -20,9 +20,9 @@ def single_plot(df):
     wait_ax.axis['right2'] = wait_ax.new_fixed_axis(loc='right', offset=(60, 0))
 
     host.plot(df['inflight'], label='Inflight')
-    host.plot(df['completed'], label='Completed')
+    host.plot(df['completed'], label='Completed Not Consumed')
     host.plot(df['completion_target_distance'], label='Completion Target Distance')
-    host.plot(df['max_inflight'], label='Max Inflight')
+    host.plot(df['target_inflight'], label='Target Inflight')
 
     p3, = consumed_ax.plot(df['consumed'], label='Consumed')
 

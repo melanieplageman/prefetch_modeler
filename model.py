@@ -16,29 +16,28 @@ class TestPipeline(Pipeline):
                          self.submitted_bucket, self.inflight_bucket,
                          self.completed_bucket, self.consumed_bucket)
 
-
 class PrefetchedGateBucket(GateBucket):
     def __init__(self, name, pipeline):
         super().__init__(name)
         self.pipeline = pipeline
 
         self.inflight_cap = 10000
-        self.completed_cap = 10000
+        self.cap_in_progress = 10000
 
         # variables for prefetch algorithm under test
         self.completion_target_distance = 512
         self.min_dispatch = 2
-        self.max_inflight = 10
+        self.target_inflight = 10
 
     @overrideable('PrefetchGateBucket.wanted_move_size')
     def wanted_move_size(self):
         inflight = len(self.pipeline.inflight_bucket)
-        completed = len(self.pipeline.completed_bucket)
+        completed_not_consumed = len(self.pipeline.completed_bucket)
 
-        if inflight >= self.max_inflight:
+        if inflight >= self.target_inflight:
             return 0
 
-        if completed >= self.completion_target_distance - self.min_dispatch:
+        if completed_not_consumed >= self.completion_target_distance - self.min_dispatch:
             return 0
 
         return self.min_dispatch
@@ -46,7 +45,7 @@ class PrefetchedGateBucket(GateBucket):
     def run(self):
         super().run()
         self.tick_data['completion_target_distance'] = self.completion_target_distance
-        self.tick_data['max_inflight'] = self.max_inflight
+        self.tick_data['target_inflight'] = self.target_inflight
         self.tick_data['min_dispatch'] = self.min_dispatch
 
 
