@@ -14,8 +14,11 @@ def algo_logger(prefetch_bucket):
     d['submitting in prog'] = len(prefetch_bucket.pipeline.submitted_bucket)
     d['submitted'] = prefetch_bucket.pipeline.submitted_bucket.counter
     d['inflight'] = len(prefetch_bucket.pipeline.inflight_bucket)
+    d['in_progress'] = d['submitted'] + d['inflight']
     d['completed_but_not_consumed'] = len(prefetch_bucket.pipeline.completed_bucket)
+    d['total_buffers_used'] = d['in_progress'] + d['completed_but_not_consumed']
     d['consumed'] = len(prefetch_bucket.pipeline.consumed_bucket)
+    d['consumption_rate'] = prefetch_bucket.pipeline.completed_bucket.consumption_rate()
 
     log_str = f"[{prefetch_bucket.tick}]:"
     for k, v in d.items():
@@ -76,6 +79,20 @@ def algo1(self):
 def algo2(self):
     return 3
 
+def consumption_rate_func(self):
+    if self.counter <= 100:
+        return Rate(per_second=10000)
+    if self.counter > 100:
+        return Rate(per_second=20000)
+
+@override('CompletedGateBucket.consumption_rate')
+def consumption_rate_func2(self):
+    if self.tick <= 5000:
+        return Rate(per_second=5000)
+    else:
+        rate = Rate(per_second=20000)
+        return rate
+
 prefetch_configs = [
     PrefetchConfiguration(inflight_cap=100,
                           completed_cap=200,
@@ -94,9 +111,8 @@ for algo in prefetch_desired_move_size_algos:
             submission_overhead=Duration(microseconds=10),
             max_iops=100,
             base_completion_latency=Duration(microseconds=400),
-            consumption_rate=Rate(per_second=50000),
         )
-        print(config)
+        print(f'config is {config}')
         pipeline = config.generate_pipeline()
 
         data = pipeline.run(volume=100, duration=Duration(seconds=2))

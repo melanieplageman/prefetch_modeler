@@ -68,36 +68,51 @@ class InflightDialBucket(DialBucket):
 
 
 class CompletedGateBucket(GateBucket):
-    def __init__(self, name):
-        super().__init__(name)
-        self.consumption_rate = 1
+    _next_consumption = 0
+    _consumption_interval = 0
+    _last_consumption = 0
 
-    @property
+    # Wrong to have here because it isn't in terms of ticks?
+    @overrideable('CompletedGateBucket.consumption_rate')
     def consumption_rate(self):
-        return self._consumption_rate
-
-    @consumption_rate.setter
-    def consumption_rate(self, rate):
-        self._consumption_rate = rate
-        if self._consumption_rate < 1:
-            self.consumption_interval = int(1 / self._consumption_rate)
-            self.consumption_size = 1
-            self.next_consumption = (self.tick or 0) + self.consumption_interval
-        else:
-            self.consumption_interval = 1
-            self.consumption_size = int(self._consumption_rate)
-            self.next_consumption = (self.tick or 0) + 0
+        return Rate(per_second=1000)
 
     def next_action(self):
-        return self.next_consumption
+        # Because consumption rate can be based on time elapsed, it must be
+        # recalculated on every tick (as opposed to on every consumption) in
+        # case it would change whether or not a consumption is required on this
+        # tick.
+        consumption_rate = self.consumption_rate().value
+        if consumption_rate >= 1:
+            raise ValueError(f'Value {self.consumption_rate} exceeds maximum consumption rate of 1 IO per microsecond. Try a slower rate.')
+        # Consumption rate has changed based on time elapsed.
+        consumption_interval = int(1 / consumption_rate)
+        if self._consumption_interval != consumption_interval:
+            self._consumption_interval = consumption_interval
+            self._next_consumption = max(self.tick + 1, self._last_consumption + self._consumption_interval)
+
+        return self._next_consumption
 
     def wanted_move_size(self):
-        if self.tick != self.next_consumption:
+        # If it is not time to consume, we don't want to move any IOs
+        if self.tick != self._next_consumption:
             return 0
 
-        if len(self.source) == 0 and self.consumption_rate < 1:
-            self.next_consumption += 1
-        else:
-            self.next_consumption += self.consumption_interval
+        # TODO: this probably needs to go outside of this function since this
+        # returns what we want and shouldn't know about what we have?
 
-        return self.consumption_size
+        # we want to consume and we can
+        # though doing this consumption may mean that our consumption rate
+        # changes since consumption rate can be based on # requests consumed,
+        # we will anyway recalculate the consumption rate on every tick, so we
+        # will find out then.
+        if len(self):
+            self._last_consumption = self.tick
+            self._next_consumption += self._consumption_interval
+
+        # We want to consume but there are no completed IOs to move, this is a
+        # wait and we'll try again next tick.
+        else:
+            self._next_consumption += 1
+
+        return 1

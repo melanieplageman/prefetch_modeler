@@ -30,6 +30,7 @@ class Pipeline:
 
         duration = duration.total
         next_tick = 0
+        saved_tick = 0
         while True:
             for bucket in self.buckets:
                 bucket.tick = next_tick
@@ -41,6 +42,10 @@ class Pipeline:
                 break
 
             next_tick = min([bucket.next_action() for bucket in self.buckets])
+            # TODO: should this raise be in the next_action() method itself?
+            if next_tick <= saved_tick:
+                raise ValueError(f'Next action tick request {next_tick} is older than last action tick {saved_tick}.')
+            saved_tick = next_tick
 
             if duration and next_tick > duration:
                 break
