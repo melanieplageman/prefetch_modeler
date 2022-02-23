@@ -30,7 +30,7 @@ def consumption_rate_func(self):
     if self.counter > 100:
         return Rate(per_second=20000)
 
-@override('CompletedGateBucket.consumption_rate')
+@override('CompleteBucket.consumption_rate')
 def consumption_rate_func2(self):
     if self.tick <= 5000:
         return Rate(per_second=5000)
@@ -53,7 +53,7 @@ pipeline_config = PipelineConfiguration(
 
 print(f'config is {pipeline_config}')
 
-@override('PrefetchedGateBucket.wanted_move_size')
+@override('PrefetchBucket.wanted_move_size')
 def algo1(self):
     inflight = len(self.pipeline.inflight_bucket)
     completed_not_consumed = len(self.pipeline.completed_bucket)
@@ -97,13 +97,13 @@ def adjust1(self):
 iterations = [
     Iteration(
         {
-            'PrefetchedGateBucket.adjust_before': adjust1,
+            'PrefetchBucket.adjust_before': adjust1,
+            'CompleteBucket.adjust_after': adjust1,
         }
     ),
     Iteration(
         {
-            'PrefetchedGateBucket.adjust_before': adjust1,
-            'CompletedGateBucket.adjust_after': adjust1,
+            'PrefetchBucket.adjust_before': adjust1,
         }
     ),
 ]

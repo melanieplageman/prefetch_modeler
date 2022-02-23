@@ -4,11 +4,11 @@ from override import overrideable
 class TestPipeline(Pipeline):
     def __init__(self):
         self.intake = IntakeBucket("intake")
-        self.prefetched_bucket = PrefetchedGateBucket(
+        self.prefetched_bucket = PrefetchBucket(
             "prefetched", self)
-        self.submitted_bucket = SubmittedDialBucket("submitted")
-        self.inflight_bucket = InflightDialBucket("inflight")
-        self.completed_bucket = CompletedGateBucket("completed", self)
+        self.submitted_bucket = SubmitBucket("submitted")
+        self.inflight_bucket = InflightBucket("inflight")
+        self.completed_bucket = CompleteBucket("completed", self)
         self.consumed_bucket = StopBucket("consumed")
 
         # storage related limits
@@ -25,12 +25,12 @@ class TestPipeline(Pipeline):
                          self.submitted_bucket, self.inflight_bucket,
                          self.completed_bucket, self.consumed_bucket)
 
-class PrefetchedGateBucket(GateBucket):
+class PrefetchBucket(GateBucket):
     def __init__(self, name, pipeline):
         super().__init__(name)
         self.pipeline = pipeline
 
-    @overrideable('PrefetchGateBucket.wanted_move_size')
+    @overrideable('PrefetchBucket.wanted_move_size')
     def wanted_move_size(self):
         inflight = len(self.pipeline.inflight_bucket)
         completed_not_consumed = len(self.pipeline.completed_bucket)
@@ -50,11 +50,11 @@ class PrefetchedGateBucket(GateBucket):
         self.tick_data['min_dispatch'] = self.min_dispatch
 
 
-class SubmittedDialBucket(DialBucket):
+class SubmitBucket(DialBucket):
     LATENCY = 1
 
 
-class InflightDialBucket(DialBucket):
+class InflightBucket(DialBucket):
     MAX_IOPS = 10000
     BASE_COMPLETION_LATENCY = 1
 
@@ -67,7 +67,7 @@ class InflightDialBucket(DialBucket):
         return self.BASE_COMPLETION_LATENCY
 
 
-class CompletedGateBucket(GateBucket):
+class CompleteBucket(GateBucket):
     def __init__(self, name, pipeline):
         super().__init__(name)
         self.pipeline = pipeline
@@ -77,7 +77,7 @@ class CompletedGateBucket(GateBucket):
         self._last_consumption = 0
 
     # Wrong to have here because it isn't in terms of ticks?
-    @overrideable('CompletedGateBucket.consumption_rate')
+    @overrideable('CompleteBucket.consumption_rate')
     def consumption_rate(self):
         return Rate(per_second=1000)
 
