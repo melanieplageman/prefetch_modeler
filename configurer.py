@@ -79,22 +79,19 @@ class PipelineConfiguration:
         pipeline.inflight_bucket.MAX_IOPS = self.max_iops
         pipeline.inflight_bucket.BASE_COMPLETION_LATENCY = self.base_completion_latency.total
 
-        pipeline.prefetched_bucket.cap_inflight = self.prefetch_configuration.cap_inflight
-        pipeline.prefetched_bucket.cap_in_progress = self.prefetch_configuration.cap_in_progress
+        pipeline.cap_inflight = self.prefetch_configuration.cap_inflight
+        pipeline.cap_in_progress = self.prefetch_configuration.cap_in_progress
         pipeline.prefetched_bucket.min_dispatch = self.prefetch_configuration.min_dispatch
 
         if self.prefetch_configuration.initial_completion_target_distance > self.prefetch_configuration.cap_in_progress:
-            raise ValueError(f'Value {self.completion_target_distance} for '
-                             f'completion_target_distance exceeds cap_in_progress '
-                             f'value of {self.cap_in_progress}.')
+            raise ValueError(f'Value {self.prefetch_configuration.initial_completion_target_distance} for ' f'completion_target_distance exceeds cap_in_progress ' f'value of {self.prefetch_configuration.cap_in_progress}.')
 
-        pipeline.prefetched_bucket.completion_target_distance = self.prefetch_configuration.initial_completion_target_distance
+        pipeline.completion_target_distance = self.prefetch_configuration.initial_completion_target_distance
 
 
         if self.prefetch_configuration.initial_target_inflight > self.prefetch_configuration.cap_inflight:
-            raise ValueError(f'Value {self.target_inflight} for target_inflight '
-                             f'exceeds cap_inflight of {self.cap_inflight}.')
+            raise ValueError(f'Value {self.prefetch_configuration.initial_target_inflight} for target_inflight ' f'exceeds cap_inflight of {self.prefetch_configuration.cap_inflight}.')
 
-        pipeline.prefetched_bucket.target_inflight = self.prefetch_configuration.initial_target_inflight
+        pipeline.target_inflight = self.prefetch_configuration.initial_target_inflight
 
         return pipeline

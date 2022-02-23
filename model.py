@@ -4,13 +4,22 @@ from override import overrideable
 class TestPipeline(Pipeline):
     def __init__(self):
         self.intake = IntakeBucket("intake")
-        self.submitted_bucket = SubmittedDialBucket("submitted")
-        self.inflight_bucket = InflightDialBucket("inflight")
-        self.completed_bucket = CompletedGateBucket("completed")
-        self.consumed_bucket = StopBucket("consumed")
-
         self.prefetched_bucket = PrefetchedGateBucket(
             "prefetched", self)
+        self.submitted_bucket = SubmittedDialBucket("submitted")
+        self.inflight_bucket = InflightDialBucket("inflight")
+        self.completed_bucket = CompletedGateBucket("completed", self)
+        self.consumed_bucket = StopBucket("consumed")
+
+        # storage related limits
+        self.cap_inflight =  10000
+        self.cap_in_progress = 10000
+
+        # variables for prefetch algorithm under test
+        self.completion_target_distance = 512
+        self.min_dispatch = 2
+        self.target_inflight = 10
+
 
         super().__init__(self.intake, self.prefetched_bucket,
                          self.submitted_bucket, self.inflight_bucket,
@@ -21,31 +30,23 @@ class PrefetchedGateBucket(GateBucket):
         super().__init__(name)
         self.pipeline = pipeline
 
-        self.inflight_cap = 10000
-        self.cap_in_progress = 10000
-
-        # variables for prefetch algorithm under test
-        self.completion_target_distance = 512
-        self.min_dispatch = 2
-        self.target_inflight = 10
-
     @overrideable('PrefetchGateBucket.wanted_move_size')
     def wanted_move_size(self):
         inflight = len(self.pipeline.inflight_bucket)
         completed_not_consumed = len(self.pipeline.completed_bucket)
 
-        if inflight >= self.target_inflight:
+        if inflight >= self.pipeline.target_inflight:
             return 0
 
-        if completed_not_consumed >= self.completion_target_distance - self.min_dispatch:
+        if completed_not_consumed >= self.pipeline.completion_target_distance - self.min_dispatch:
             return 0
 
         return self.min_dispatch
 
     def run(self):
         super().run()
-        self.tick_data['completion_target_distance'] = self.completion_target_distance
-        self.tick_data['target_inflight'] = self.target_inflight
+        self.tick_data['completion_target_distance'] = self.pipeline.completion_target_distance
+        self.tick_data['target_inflight'] = self.pipeline.target_inflight
         self.tick_data['min_dispatch'] = self.min_dispatch
 
 
@@ -67,9 +68,13 @@ class InflightDialBucket(DialBucket):
 
 
 class CompletedGateBucket(GateBucket):
-    _next_consumption = 0
-    _consumption_interval = 0
-    _last_consumption = 0
+    def __init__(self, name, pipeline):
+        super().__init__(name)
+        self.pipeline = pipeline
+
+        self._next_consumption = 0
+        self._consumption_interval = 0
+        self._last_consumption = 0
 
     # Wrong to have here because it isn't in terms of ticks?
     @overrideable('CompletedGateBucket.consumption_rate')

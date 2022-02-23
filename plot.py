@@ -1,5 +1,26 @@
 import matplotlib.pyplot as plt
 from mpl_toolkits.axisartist.parasite_axes import HostAxes, ParasiteAxes
+import pandas as pd
+
+def transform(data):
+    to_plot = pd.DataFrame(index=data.index)
+    to_plot['wait'] = data.apply(lambda record:
+        record['completed_want_to_move'] > record['completed_to_move'], axis='columns')
+
+    # TODO: what is a good way to skip ticks that aren't there
+    last_wait = 0
+    for i in range(len(to_plot['wait'])):
+        try:
+            last_wait = last_wait + 1 if to_plot['wait'][i] else 0
+            to_plot['wait'][i] = last_wait
+        except: KeyError
+
+    to_plot['completed'] = data['completed_num_ios']
+    to_plot['inflight'] = data['inflight_num_ios']
+    to_plot['consumed'] = data['consumed_num_ios']
+    to_plot['completion_target_distance'] = data['prefetched_completion_target_distance']
+    to_plot['target_inflight'] = data['prefetched_target_inflight']
+    return to_plot
 
 def single_plot(df):
     fig = plt.figure(figsize=(15,11))
@@ -39,3 +60,7 @@ def single_plot(df):
     wait_ax.axis['right2'].label.set_color(p4.get_color())
 
     plt.show()
+
+def do_plot(data):
+    to_plot = transform(data)
+    single_plot(to_plot)
