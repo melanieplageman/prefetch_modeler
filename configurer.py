@@ -35,9 +35,13 @@ class Workload:
 
 @dataclass
 class PrefetchConfiguration:
+    prefetch_size_func: Callable
     min_dispatch: int = 10
     initial_completion_target_distance: int = 12
     initial_target_inflight: int = 10
+
+    def configure_pipeline(self, pipeline):
+        pipeline.registry['PrefetchBucket.wanted_move_size'] = self.prefetch_size_func
 
 @dataclass(frozen=True)
 class PipelineConfiguration:

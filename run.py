@@ -1,6 +1,5 @@
 from configurer import PrefetchConfiguration, PipelineConfiguration, Rate, Duration, Iteration, Storage, Workload
 from plot import do_plot
-from override import override
 
 def algo_logger(prefetch_bucket):
     d = {}
@@ -22,6 +21,14 @@ def algo_logger(prefetch_bucket):
 # LOG_PREFETCH = True
 LOG_PREFETCH = False
 
+storage = Storage(
+            max_iops=100,
+            cap_inflight=100,
+            cap_in_progress=200,
+            submission_overhead=Duration(microseconds=10),
+            base_completion_latency=Duration(microseconds=400),
+            )
+
 def consumption_rate_func(self):
     if self.counter <= 100:
         return Rate(per_second=10000)
@@ -35,34 +42,13 @@ def consumption_rate_func2(self):
         rate = Rate(per_second=20000)
         return rate
 
-storage = Storage(
-            max_iops=100,
-            cap_inflight=100,
-            cap_in_progress=200,
-            submission_overhead=Duration(microseconds=10),
-            base_completion_latency=Duration(microseconds=400),
-            )
-
 workload = Workload(
                 volume=100,
                 duration=Duration(seconds=2),
                 consumption_rate_func=consumption_rate_func2,
                 )
 
-prefetch_config = PrefetchConfiguration(
-                          min_dispatch=2,
-                          initial_completion_target_distance=15,
-                          initial_target_inflight=10,)
-
-pipeline_config = PipelineConfiguration(
-    prefetch_configuration=prefetch_config,
-    storage=storage,
-)
-
-print(f'config is {pipeline_config}')
-
-@override('PrefetchBucket.wanted_move_size')
-def algo1(self):
+def prefetch_size1(self):
     inflight = len(self.pipeline.inflight_bucket)
     completed_not_consumed = len(self.pipeline.completed_bucket)
 
@@ -97,6 +83,20 @@ def adjust1(self):
         desired_completion_target_distance = self.pipeline.completion_target_distance + 1
         self.pipeline.completion_target_distance = min(desired_completion_target_distance, self.pipeline.cap_in_progress)
 
+prefetch_config = PrefetchConfiguration(
+                          prefetch_size_func=prefetch_size1,
+                          min_dispatch=2,
+                          initial_completion_target_distance=15,
+                          initial_target_inflight=10,
+                    )
+
+pipeline_config = PipelineConfiguration(
+    prefetch_configuration=prefetch_config,
+    storage=storage,
+)
+
+print(f'config is {pipeline_config}')
+
 iterations = [
     Iteration(
         {
@@ -116,6 +116,7 @@ for iteration in iterations:
     pipeline = pipeline_config.generate_pipeline()
     iteration.configure_pipeline(pipeline)
     workload.configure_pipeline(pipeline)
+    prefetch_config.configure_pipeline(pipeline)
 
     data = pipeline.run(workload)
 

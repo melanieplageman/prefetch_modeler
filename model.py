@@ -1,5 +1,4 @@
 from bucket import Pipeline, GateBucket, DialBucket, IntakeBucket, StopBucket
-from override import overrideable
 from units import Rate, Duration
 
 class TestPipeline(Pipeline):
@@ -24,8 +23,11 @@ class TestPipeline(Pipeline):
                          self.completed_bucket, self.consumed_bucket)
 
 class PrefetchBucket(GateBucket):
-    @overrideable('PrefetchBucket.wanted_move_size')
     def wanted_move_size(self):
+        func = self.pipeline.registry.get(self.__class__.__name__ + '.wanted_move_size')
+        if func:
+            return func(self)
+
         inflight = len(self.pipeline.inflight_bucket)
         completed_not_consumed = len(self.pipeline.completed_bucket)
 
