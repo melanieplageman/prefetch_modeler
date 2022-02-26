@@ -53,6 +53,14 @@ class Rate:
         if self.original_unit == Unit.SECOND:
             return f'{int(self.value * 1000 * 1000)}' + extension
 
+class Iteration:
+    def __init__(self, assignments):
+        self.assignments = assignments
+
+    def configure_pipeline(self, pipeline):
+        for k, v in self.assignments.items():
+            pipeline.registry[k] = v
+
 @dataclass
 class PrefetchConfiguration:
     cap_inflight: int = 100

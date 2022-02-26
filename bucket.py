@@ -6,8 +6,6 @@ import math
 
 LOG_BUCKETS = False
 
-registry = {}
-
 class IO: pass
 
 
@@ -55,8 +53,9 @@ class Pipeline:
         return self.data
 
 class Bucket(collections.abc.MutableSet):
-    def __init__(self, name):
+    def __init__(self, name, pipeline):
         self.name = name
+        self.pipeline = pipeline
 
         self.source = set()
         self.target = self
@@ -111,14 +110,14 @@ class Bucket(collections.abc.MutableSet):
     def adjust_before(self):
         # TODO: replace string 'adjust_before' with function name
         # introspection?
-        adjust_func = registry.get(self.__class__.__name__ + '.adjust_before')
+        adjust_func = self.pipeline.registry.get(self.__class__.__name__ + '.adjust_before')
         if adjust_func:
             return adjust_func(self)
 
     def adjust_after(self):
         # TODO: replace string 'adjust_after' with function name
         # introspection?
-        adjust_func = registry.get(self.__class__.__name__ + '.adjust_after')
+        adjust_func = self.pipeline.registry.get(self.__class__.__name__ + '.adjust_after')
         if adjust_func:
             return adjust_func(self)
 

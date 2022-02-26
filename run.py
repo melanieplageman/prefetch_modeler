@@ -1,8 +1,6 @@
-from configurer import *
-from model import *
-from bucket import *
+from configurer import PrefetchConfiguration, PipelineConfiguration, Rate, Duration, Iteration
 from plot import do_plot
-from override import override, AlgorithmCollection
+from override import override
 
 def algo_logger(prefetch_bucket):
     d = {}
@@ -72,11 +70,6 @@ def algo1(self):
         print('Post Adjustment:\n' + algo_logger(self))
     return to_submit
 
-class Iteration:
-    def __init__(self, assignments):
-        for k, v in assignments.items():
-            registry[k] = v
-
 def adjust1(self):
     inflight = len(self.pipeline.inflight_bucket)
     completed_not_consumed = len(self.pipeline.completed_bucket)
@@ -111,6 +104,7 @@ iterations = [
 for iteration in iterations:
     # For now, you must specify whole numbers for Duration and Rate
     pipeline = pipeline_config.generate_pipeline()
+    iteration.configure_pipeline(pipeline)
 
     data = pipeline.run(volume=100, duration=Duration(seconds=2))
 

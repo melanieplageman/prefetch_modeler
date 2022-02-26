@@ -23,20 +23,3 @@ class override:
     def __call__(self, function):
         registry[self.function_to_override] = function
         return function
-
-
-class AlgorithmCollection(collections.abc.Set):
-    def __init__(self):
-        self.registry = set()
-
-    def __contains__(self, item):
-        return item in self.registry
-
-    def __iter__(self):
-        return iter(self.registry)
-
-    def __len__(self):
-        return len(self.registry)
-
-    def algorithm(self, function):
-        self.registry.add(function)

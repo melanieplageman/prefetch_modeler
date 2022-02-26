@@ -3,13 +3,14 @@ from override import overrideable
 
 class TestPipeline(Pipeline):
     def __init__(self):
-        self.intake = IntakeBucket("intake")
-        self.prefetched_bucket = PrefetchBucket(
-            "prefetched", self)
-        self.submitted_bucket = SubmitBucket("submitted")
-        self.inflight_bucket = InflightBucket("inflight")
+        self.registry = {}
+
+        self.intake = IntakeBucket("intake", self)
+        self.prefetched_bucket = PrefetchBucket("prefetched", self)
+        self.submitted_bucket = SubmitBucket("submitted", self)
+        self.inflight_bucket = InflightBucket("inflight", self)
         self.completed_bucket = CompleteBucket("completed", self)
-        self.consumed_bucket = StopBucket("consumed")
+        self.consumed_bucket = StopBucket("consumed", self)
 
         # storage related limits
         self.cap_inflight =  10000
@@ -26,10 +27,6 @@ class TestPipeline(Pipeline):
                          self.completed_bucket, self.consumed_bucket)
 
 class PrefetchBucket(GateBucket):
-    def __init__(self, name, pipeline):
-        super().__init__(name)
-        self.pipeline = pipeline
-
     @overrideable('PrefetchBucket.wanted_move_size')
     def wanted_move_size(self):
         inflight = len(self.pipeline.inflight_bucket)
@@ -68,13 +65,9 @@ class InflightBucket(DialBucket):
 
 
 class CompleteBucket(GateBucket):
-    def __init__(self, name, pipeline):
-        super().__init__(name)
-        self.pipeline = pipeline
-
-        self._next_consumption = 0
-        self._consumption_interval = 0
-        self._last_consumption = 0
+    _next_consumption = 0
+    _consumption_interval = 0
+    _last_consumption = 0
 
     # Wrong to have here because it isn't in terms of ticks?
     @overrideable('CompleteBucket.consumption_rate')
