@@ -1,4 +1,4 @@
-from configurer import PrefetchConfiguration, PipelineConfiguration, Rate, Duration, Iteration, Storage
+from configurer import PrefetchConfiguration, PipelineConfiguration, Rate, Duration, Iteration, Storage, Workload
 from plot import do_plot
 from override import override
 
@@ -41,6 +41,11 @@ storage = Storage(
             cap_inflight=100,
             cap_in_progress=200,
             )
+
+workload = Workload(
+                volume=100,
+                duration=Duration(seconds=2),
+                )
 
 prefetch_config = PrefetchConfiguration(
                           min_dispatch=2,
@@ -111,6 +116,6 @@ for iteration in iterations:
     pipeline = pipeline_config.generate_pipeline()
     iteration.configure_pipeline(pipeline)
 
-    data = pipeline.run(volume=100, duration=Duration(seconds=2))
+    data = pipeline.run(workload)
 
     do_plot(data)

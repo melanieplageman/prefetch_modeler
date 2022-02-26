@@ -67,6 +67,11 @@ class Storage:
         self.cap_inflight = cap_inflight
         self.cap_in_progress = cap_in_progress
 
+class Workload:
+    def __init__(self, volume, duration=None):
+        self.volume = volume
+        self.duration = duration.total if duration else None
+
 @dataclass
 class PrefetchConfiguration:
     min_dispatch: int = 10
