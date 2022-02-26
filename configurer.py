@@ -1,57 +1,7 @@
 from dataclasses import dataclass, asdict
 from typing import Callable
 from model import TestPipeline
-from fractions import Fraction
-from enum import Enum, auto
-
-class Unit(Enum):
-    MICROSECOND = auto()
-    MILLISECOND = auto()
-    SECOND = auto()
-
-class Duration:
-    def __init__(self, microseconds=0, milliseconds=0, seconds=0):
-        self.total = microseconds + (milliseconds * 1000) + (seconds * 1000 * 1000)
-
-    # TODO: make this say per unit
-    def __str__(self):
-        return f'{self.total} microseconds'
-
-class Rate:
-    def __init__(self, per_microsecond=0, per_millisecond=0, per_second=0):
-        if per_microsecond:
-            if per_millisecond or per_second:
-                raise ValueError('Can only specify one Rate unit')
-            self.value = Fraction(per_microsecond)
-            self.original_unit = Unit.MICROSECOND
-
-        elif per_millisecond:
-            if per_microsecond or per_second:
-                raise ValueError('Can only specify one Rate unit')
-            self.value = Fraction(per_millisecond, 1000)
-            self.original_unit = Unit.MILLISECOND
-
-            if self.value.denominator != 1 and self.value.numerator != 1:
-                raise ValueError(f"per_millisecond={per_millisecond} must be divisible by 1000")
-
-        elif per_second:
-            if per_millisecond or per_microsecond:
-                raise ValueError('Can only specify one Rate unit')
-            self.value = Fraction(per_second, 1000 * 1000)
-            self.original_unit = Unit.SECOND
-
-            if self.value.denominator != 1 and self.value.numerator != 1:
-                raise ValueError(f"per_second={per_second} must be divisible by 1,000,000")
-
-    def __str__(self):
-        extension = f' per {(self.original_unit.name).lower()}'
-
-        if self.original_unit == Unit.MICROSECOND:
-            return f'{int(self.value)}' + extension
-        if self.original_unit == Unit.MILLISECOND:
-            return f'{int(self.value * 1000)}' + extension
-        if self.original_unit == Unit.SECOND:
-            return f'{int(self.value * 1000 * 1000)}' + extension
+from units import Rate, Duration
 
 class Iteration:
     def __init__(self, assignments):
@@ -62,15 +12,26 @@ class Iteration:
             pipeline.registry[k] = v
 
 class Storage:
-    def __init__(self, max_iops, cap_inflight, cap_in_progress):
+    def __init__(self, max_iops, cap_inflight, cap_in_progress,
+                 submission_overhead, base_completion_latency):
         self.max_iops = max_iops
         self.cap_inflight = cap_inflight
         self.cap_in_progress = cap_in_progress
+        self.submission_overhead = submission_overhead
+        self.base_completion_latency = base_completion_latency
+
+    def __str__(self):
+        return ', '.join([f'{k}: {v}' for k, v in self.__dict__.items()])
 
 class Workload:
-    def __init__(self, volume, duration=None):
+    def __init__(self, volume, duration=None, consumption_rate_func=None):
         self.volume = volume
         self.duration = duration.total if duration else None
+        self.consumption_rate_func = consumption_rate_func
+
+    def configure_pipeline(self, pipeline):
+        pipeline.registry['CompleteBucket.consumption_rate'] = self.consumption_rate_func
+
 
 @dataclass
 class PrefetchConfiguration:
@@ -82,8 +43,6 @@ class PrefetchConfiguration:
 class PipelineConfiguration:
     prefetch_configuration: PrefetchConfiguration
     storage: Storage
-    submission_overhead: Duration
-    base_completion_latency: Duration
 
     def __str__(self):
         return '\n'.join(f'{k}: {str(v)}' for k, v in asdict(self).items())
@@ -91,10 +50,10 @@ class PipelineConfiguration:
     def generate_pipeline(self, *args, **kwargs):
         pipeline = TestPipeline()
 
-        pipeline.submitted_bucket.LATENCY = self.submission_overhead.total
+        pipeline.submitted_bucket.LATENCY = self.storage.submission_overhead.total
 
         pipeline.inflight_bucket.MAX_IOPS = self.storage.max_iops
-        pipeline.inflight_bucket.BASE_COMPLETION_LATENCY = self.base_completion_latency.total
+        pipeline.inflight_bucket.BASE_COMPLETION_LATENCY = self.storage.base_completion_latency.total
 
         pipeline.cap_inflight = self.storage.cap_inflight
         pipeline.cap_in_progress = self.storage.cap_in_progress

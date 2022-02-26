@@ -1,5 +1,6 @@
 from bucket import Pipeline, GateBucket, DialBucket, IntakeBucket, StopBucket
 from override import overrideable
+from units import Rate, Duration
 
 class TestPipeline(Pipeline):
     def __init__(self):
@@ -66,8 +67,11 @@ class CompleteBucket(GateBucket):
     _last_consumption = 0
 
     # Wrong to have here because it isn't in terms of ticks?
-    @overrideable('CompleteBucket.consumption_rate')
     def consumption_rate(self):
+        func = self.pipeline.registry.get(self.__class__.__name__ + '.consumption_rate')
+        if func:
+            return func(self)
+
         return Rate(per_second=1000)
 
     def next_action(self):

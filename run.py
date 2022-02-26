@@ -28,7 +28,6 @@ def consumption_rate_func(self):
     if self.counter > 100:
         return Rate(per_second=20000)
 
-@override('CompleteBucket.consumption_rate')
 def consumption_rate_func2(self):
     if self.tick <= 5000:
         return Rate(per_second=5000)
@@ -40,11 +39,14 @@ storage = Storage(
             max_iops=100,
             cap_inflight=100,
             cap_in_progress=200,
+            submission_overhead=Duration(microseconds=10),
+            base_completion_latency=Duration(microseconds=400),
             )
 
 workload = Workload(
                 volume=100,
                 duration=Duration(seconds=2),
+                consumption_rate_func=consumption_rate_func2,
                 )
 
 prefetch_config = PrefetchConfiguration(
@@ -55,8 +57,6 @@ prefetch_config = PrefetchConfiguration(
 pipeline_config = PipelineConfiguration(
     prefetch_configuration=prefetch_config,
     storage=storage,
-    submission_overhead=Duration(microseconds=10),
-    base_completion_latency=Duration(microseconds=400),
 )
 
 print(f'config is {pipeline_config}')
@@ -115,6 +115,7 @@ for iteration in iterations:
     # For now, you must specify whole numbers for Duration and Rate
     pipeline = pipeline_config.generate_pipeline()
     iteration.configure_pipeline(pipeline)
+    workload.configure_pipeline(pipeline)
 
     data = pipeline.run(workload)
 
