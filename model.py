@@ -12,10 +12,6 @@ class TestPipeline(Pipeline):
         self.completed_bucket = CompleteBucket("completed", self)
         self.consumed_bucket = StopBucket("consumed", self)
 
-        # storage related limits
-        self.cap_inflight =  10000
-        self.cap_in_progress = 10000
-
         # variables for prefetch algorithm under test
         self.completion_target_distance = 512
         self.min_dispatch = 2

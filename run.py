@@ -1,4 +1,4 @@
-from configurer import PrefetchConfiguration, PipelineConfiguration, Rate, Duration, Iteration
+from configurer import PrefetchConfiguration, PipelineConfiguration, Rate, Duration, Iteration, Storage
 from plot import do_plot
 from override import override
 
@@ -36,16 +36,21 @@ def consumption_rate_func2(self):
         rate = Rate(per_second=20000)
         return rate
 
-prefetch_config = PrefetchConfiguration(cap_inflight=100,
-                          cap_in_progress=200,
+storage = Storage(
+            max_iops=100,
+            cap_inflight=100,
+            cap_in_progress=200,
+            )
+
+prefetch_config = PrefetchConfiguration(
                           min_dispatch=2,
                           initial_completion_target_distance=15,
                           initial_target_inflight=10,)
 
 pipeline_config = PipelineConfiguration(
     prefetch_configuration=prefetch_config,
+    storage=storage,
     submission_overhead=Duration(microseconds=10),
-    max_iops=100,
     base_completion_latency=Duration(microseconds=400),
 )
 
