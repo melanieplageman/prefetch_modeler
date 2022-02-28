@@ -52,15 +52,19 @@ class SubmitBucket(DialBucket):
 
 class InflightBucket(DialBucket):
     MAX_IOPS = 10000
-    BASE_COMPLETION_LATENCY = 1
+    base_completion_latency = 1
 
     def latency(self):
+        func = self.pipeline.registry.get(self.__class__.__name__ + '.latency')
+        if func:
+            return func(self)
+
         # TODO: make this formula better
-        completion_latency = self.BASE_COMPLETION_LATENCY
+        completion_latency = self.base_completion_latency
         if len(self) + 1 >= self.MAX_IOPS:
             completion_latency = 10
         completion_latency += (0.01 * len(self))
-        return self.BASE_COMPLETION_LATENCY
+        return self.base_completion_latency
 
 
 class CompleteBucket(GateBucket):
