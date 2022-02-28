@@ -47,9 +47,9 @@ def consumption_rate_func2(self):
         return rate
 
 workload = Workload(
+                consumption_rate_func=consumption_rate_func2,
                 volume=100,
                 duration=Duration(seconds=2),
-                consumption_rate_func=consumption_rate_func2,
                 )
 
 def prefetch_size1(self):

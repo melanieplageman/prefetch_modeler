@@ -51,7 +51,7 @@ class SubmitBucket(DialBucket):
 
 
 class InflightBucket(DialBucket):
-    MAX_IOPS = 10000
+    max_iops = 10000
     base_completion_latency = 1
 
     def latency(self):
@@ -61,7 +61,7 @@ class InflightBucket(DialBucket):
 
         # TODO: make this formula better
         completion_latency = self.base_completion_latency
-        if len(self) + 1 >= self.MAX_IOPS:
+        if len(self) + 1 >= self.max_iops:
             completion_latency = 10
         completion_latency += (0.01 * len(self))
         return self.base_completion_latency

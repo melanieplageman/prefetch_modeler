@@ -46,7 +46,7 @@ class Pipeline:
                 raise ValueError(f'Next action tick request {next_tick} is older than last action tick {saved_tick}.')
             saved_tick = next_tick
 
-            if workload.duration and next_tick > workload.duration:
+            if workload.runtime and next_tick > workload.runtime:
                 break
 
         return self.data
