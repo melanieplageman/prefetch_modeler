@@ -11,7 +11,7 @@ def algo_logger(prefetch_bucket):
     d['in_progress_ios'] = d['submitting'] + d['inflight'] + d['completed_not_consumed']
     d['consumed_total'] = prefetch_bucket.pipeline.consumed_bucket.counter
     d['consumption_rate'] = prefetch_bucket.pipeline.completed_bucket.consumption_rate()
-    d['completed_target_distance'] = prefetch_bucket.completion_target_distance
+    d['completed_target_distance'] = prefetch_bucket.pipeline.completion_target_distance
 
     log_str = f"[{prefetch_bucket.tick}]:"
     for k, v in d.items():
