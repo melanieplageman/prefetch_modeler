@@ -24,7 +24,7 @@ LOG_PREFETCH = False
 
 
 def storage_latency1(self, original):
-    return self.base_completion_latency
+    return original(self)
 
 # For now, you must specify whole numbers for Duration and Rate
 storages = [
@@ -80,8 +80,6 @@ def prefetch_size1(self, original):
 
     target = max(self.min_dispatch, target)
     to_submit = min(self.pipeline.target_inflight - inflight, target)
-    if LOG_PREFETCH:
-        print('Post Adjustment:\n' + algo_logger(self))
     return to_submit
 
 def adjust1(self, original):
@@ -100,6 +98,9 @@ def adjust1(self, original):
     if completed_not_consumed < 0.25 * self.pipeline.completion_target_distance:
         desired_completion_target_distance = self.pipeline.completion_target_distance + 1
         self.pipeline.completion_target_distance = min(desired_completion_target_distance, self.pipeline.cap_in_progress)
+
+    if LOG_PREFETCH:
+        print('Post Adjustment:\n' + algo_logger(self))
 
 def adjust2(self, original):
     inflight = len(self.pipeline.inflight_bucket)
