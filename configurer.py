@@ -4,9 +4,8 @@ from model import TestPipeline
 from units import Rate, Duration
 
 class Configuration:
-    # TODO: Make this print names of functions for functions
     def __str__(self):
-        return ', '.join([f'{k}: {v}' for k, v in self.__dict__.items()])
+        return '\n'.join(f'{k}: {v.__name__ if callable(v) else v}' for k, v in self.__dict__.items())
 
 @dataclass
 class Storage(Configuration):
@@ -27,9 +26,8 @@ class Workload(Configuration):
     volume : int
     duration : Duration
 
-    @property
-    def runtime(self):
-        return self.duration.total if self.duration else None
+    def __post_init__(self):
+        self.duration = self.duration.total if self.duration else None
 
     def configure_pipeline(self, pipeline):
         pipeline.registry['CompleteBucket.consumption_rate'] = self.consumption_rate_func
@@ -49,14 +47,14 @@ class Prefetcher(Configuration):
             pipeline.registry[k] = v
 
 
-@dataclass(frozen=True)
 class PipelineConfiguration:
-    storage: Storage
-    workload: Workload
-    prefetcher: Prefetcher
+    def __init__(self, storage, workload, prefetcher):
+        self.storage = storage
+        self.workload = workload
+        self.prefetcher = prefetcher
 
     def __str__(self):
-        return '\n'.join(f'{k}: {str(v)}' for k, v in asdict(self).items())
+        return '\n\n'.join(f'{k}:\n{str(v)}' for k, v in self.__dict__.items())
 
     def generate_pipeline(self, *args, **kwargs):
         pipeline = TestPipeline()

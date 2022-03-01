@@ -118,7 +118,7 @@ for prefetcher in prefetchers:
     )
     # TODO: finish changing all of this to match interface
 
-    print(f'config is {pipeline_config}')
+    print(f'config is:\n{pipeline_config}')
 
     # For now, you must specify whole numbers for Duration and Rate
     pipeline = pipeline_config.generate_pipeline()
