@@ -8,6 +8,7 @@ class TestPipeline(Pipeline):
         self.intake = IntakeBucket("intake", self)
         self.prefetched_bucket = PrefetchBucket("prefetched", self)
         self.submitted_bucket = SubmitBucket("submitted", self)
+        self.waited_bucket = WaitBucket("waited", self)
         self.inflight_bucket = InflightBucket("inflight", self)
         self.completed_bucket = CompleteBucket("completed", self)
         self.consumed_bucket = StopBucket("consumed", self)
@@ -19,7 +20,8 @@ class TestPipeline(Pipeline):
 
 
         super().__init__(self.intake, self.prefetched_bucket,
-                         self.submitted_bucket, self.inflight_bucket,
+                         self.submitted_bucket, self.waited_bucket,
+                         self.inflight_bucket,
                          self.completed_bucket, self.consumed_bucket)
 
 class PrefetchBucket(GateBucket):
@@ -46,6 +48,13 @@ class PrefetchBucket(GateBucket):
 class SubmitBucket(DialBucket):
     LATENCY = 1
 
+# Remember next_action() is infinity but is actually whenever InflightBucket
+# has its next action, so, if we ever try to be clever about executing some
+# buckets and not others, we'll have to handle this
+class WaitBucket(GateBucket):
+    def wanted_move_size(self):
+        return min(len(self), max(0, self.target.max_iops - len(self.target)))
+
 class InflightBucket(DialBucket):
     def __init__(self, *args, **kwargs):
         self.max_iops = 10
@@ -55,11 +64,7 @@ class InflightBucket(DialBucket):
     @overrideable
     def latency(self):
         # TODO: make this formula better
-        completion_latency = self.base_completion_latency
-        if len(self) + 1 >= self.max_iops:
-            completion_latency = 10
-        completion_latency += (0.01 * len(self))
-        return self.base_completion_latency
+        return int(self.base_completion_latency + (0.01 * len(self)))
 
 
 class CompleteBucket(GateBucket):
