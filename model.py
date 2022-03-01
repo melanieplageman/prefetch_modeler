@@ -47,8 +47,10 @@ class SubmitBucket(DialBucket):
     LATENCY = 1
 
 class InflightBucket(DialBucket):
-    max_iops = 10000
-    base_completion_latency = 1
+    def __init__(self, *args, **kwargs):
+        self.max_iops = 10
+        self.base_completion_latency = 1
+        super().__init__(*args, **kwargs)
 
     @overrideable
     def latency(self):
