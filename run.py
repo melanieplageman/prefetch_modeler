@@ -1,4 +1,5 @@
-from configurer import Prefetcher, PipelineConfiguration, Rate, Duration, Storage, Workload
+from configurer import PipelineConfiguration, Prefetcher, Storage, Workload
+from units import Rate, Duration
 from plot import do_plot
 
 def algo_logger(prefetch_bucket):
@@ -21,9 +22,11 @@ def algo_logger(prefetch_bucket):
 # LOG_PREFETCH = True
 LOG_PREFETCH = False
 
-def storage_latency1(self):
+
+def storage_latency1(self, original):
     return self.base_completion_latency
 
+# For now, you must specify whole numbers for Duration and Rate
 storage = Storage(
             completion_latency_func = storage_latency1,
             base_completion_latency=Duration(microseconds=400),
@@ -33,13 +36,14 @@ storage = Storage(
             cap_in_progress=200,
             )
 
-def consumption_rate_func(self):
+
+def consumption_rate_func(self, original):
     if self.counter <= 100:
         return Rate(per_second=10000)
     if self.counter > 100:
         return Rate(per_second=20000)
 
-def consumption_rate_func2(self):
+def consumption_rate_func2(self, original):
     if self.tick <= 5000:
         return Rate(per_second=5000)
     else:
@@ -52,7 +56,8 @@ workload = Workload(
                 duration=Duration(seconds=2),
                 )
 
-def prefetch_size1(self):
+
+def prefetch_size1(self, original):
     inflight = len(self.pipeline.inflight_bucket)
     completed_not_consumed = len(self.pipeline.completed_bucket)
 
@@ -70,7 +75,7 @@ def prefetch_size1(self):
         print('Post Adjustment:\n' + algo_logger(self))
     return to_submit
 
-def adjust1(self):
+def adjust1(self, original):
     inflight = len(self.pipeline.inflight_bucket)
     completed_not_consumed = len(self.pipeline.completed_bucket)
     consumed_total = self.pipeline.consumed_bucket.counter
@@ -92,8 +97,8 @@ prefetchers = [
             Prefetcher(
                           prefetch_size_func=prefetch_size1,
                           adjusters = {
-                                        'PrefetchBucket.adjust_before' : adjust1,
-                                        'CompleteBucket.adjust_after' : adjust1,
+                                        'prefetched.adjust_before' : adjust1,
+                                        'completed.adjust_after' : adjust1,
                                       },
                           min_dispatch=2,
                           initial_completion_target_distance=15,
@@ -102,7 +107,7 @@ prefetchers = [
             Prefetcher(
                           prefetch_size_func=prefetch_size1,
                           adjusters = {
-                                        'PrefetchBucket.adjust_before' : adjust1,
+                                        'prefetched.adjust_before' : adjust1,
                                       },
                           min_dispatch=2,
                           initial_completion_target_distance=15,
@@ -116,11 +121,9 @@ for prefetcher in prefetchers:
         workload=workload,
         prefetcher=prefetcher,
     )
-    # TODO: finish changing all of this to match interface
 
     print(f'config is:\n{pipeline_config}')
 
-    # For now, you must specify whole numbers for Duration and Rate
     pipeline = pipeline_config.generate_pipeline()
 
     data = pipeline.run(workload)

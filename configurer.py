@@ -1,7 +1,7 @@
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import Callable
 from model import TestPipeline
-from units import Rate, Duration
+from units import Duration
 
 class Configuration:
     def __str__(self):
@@ -17,7 +17,7 @@ class Storage(Configuration):
     cap_in_progress : int
 
     def configure_pipeline(self, pipeline):
-        pipeline.registry['InflightBucket.latency'] = self.completion_latency_func
+        pipeline.override('inflight.latency', self.completion_latency_func)
 
 
 @dataclass
@@ -30,7 +30,7 @@ class Workload(Configuration):
         self.duration = self.duration.total if self.duration else None
 
     def configure_pipeline(self, pipeline):
-        pipeline.registry['CompleteBucket.consumption_rate'] = self.consumption_rate_func
+        pipeline.override('completed.consumption_rate', self.consumption_rate_func)
 
 
 @dataclass
@@ -42,9 +42,9 @@ class Prefetcher(Configuration):
     initial_target_inflight : int
 
     def configure_pipeline(self, pipeline):
-        pipeline.registry['PrefetchBucket.wanted_move_size'] = self.prefetch_size_func
+        pipeline.override('prefetched.wanted_move_size', self.prefetch_size_func)
         for k, v in self.adjusters.items():
-            pipeline.registry[k] = v
+            pipeline.override(k, v)
 
 
 class PipelineConfiguration:

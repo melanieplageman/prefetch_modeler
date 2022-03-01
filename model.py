@@ -1,9 +1,9 @@
 from bucket import Pipeline, GateBucket, DialBucket, IntakeBucket, StopBucket
-from units import Rate, Duration
+from units import Rate
+from override import overrideable
 
 class TestPipeline(Pipeline):
     def __init__(self):
-        self.registry = {}
 
         self.intake = IntakeBucket("intake", self)
         self.prefetched_bucket = PrefetchBucket("prefetched", self)
@@ -23,11 +23,8 @@ class TestPipeline(Pipeline):
                          self.completed_bucket, self.consumed_bucket)
 
 class PrefetchBucket(GateBucket):
+    @overrideable
     def wanted_move_size(self):
-        func = self.pipeline.registry.get(self.__class__.__name__ + '.wanted_move_size')
-        if func:
-            return func(self)
-
         inflight = len(self.pipeline.inflight_bucket)
         completed_not_consumed = len(self.pipeline.completed_bucket)
 
@@ -49,16 +46,12 @@ class PrefetchBucket(GateBucket):
 class SubmitBucket(DialBucket):
     LATENCY = 1
 
-
 class InflightBucket(DialBucket):
     max_iops = 10000
     base_completion_latency = 1
 
+    @overrideable
     def latency(self):
-        func = self.pipeline.registry.get(self.__class__.__name__ + '.latency')
-        if func:
-            return func(self)
-
         # TODO: make this formula better
         completion_latency = self.base_completion_latency
         if len(self) + 1 >= self.max_iops:
@@ -68,16 +61,14 @@ class InflightBucket(DialBucket):
 
 
 class CompleteBucket(GateBucket):
-    _next_consumption = 0
-    _consumption_interval = 0
-    _last_consumption = 0
+    def __init__(self, *args, **kwargs):
+        self._next_consumption = 0
+        self._consumption_interval = 0
+        self._last_consumption = 0
+        super().__init__(*args, **kwargs)
 
-    # Wrong to have here because it isn't in terms of ticks?
+    @overrideable
     def consumption_rate(self):
-        func = self.pipeline.registry.get(self.__class__.__name__ + '.consumption_rate')
-        if func:
-            return func(self)
-
         return Rate(per_second=1000)
 
     def next_action(self):

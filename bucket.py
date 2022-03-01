@@ -1,8 +1,9 @@
 import collections.abc
-from dataclasses import dataclass
 import itertools
 import pandas as pd
 import math
+from override import Overrideable, overrideable
+
 
 LOG_BUCKETS = False
 
@@ -51,7 +52,19 @@ class Pipeline:
 
         return self.data
 
-class Bucket(collections.abc.MutableSet):
+    def override(self, name, function):
+        bucket_name, function_name = name.split('.')
+
+        for bucket in self.buckets:
+            if bucket.name == bucket_name:
+                break
+        else:
+            raise ValueError(f'No such bucket {bucket_name!r}')
+
+        bucket.override[function_name] = function
+
+
+class Bucket(Overrideable, collections.abc.MutableSet):
     def __init__(self, name, pipeline):
         self.name = name
         self.pipeline = pipeline
@@ -65,6 +78,8 @@ class Bucket(collections.abc.MutableSet):
 
         self._data = []
         self.tick_data = None
+
+        super().__init__()
 
     def __repr__(self):
         return f"{type(self).__name__}({self.name!r})"
@@ -106,20 +121,15 @@ class Bucket(collections.abc.MutableSet):
     def next_action(self):
         return math.inf
 
+    @overrideable
     def adjust_before(self):
-        # TODO: replace string 'adjust_before' with function name
-        # introspection?
-        adjust_func = self.pipeline.registry.get(self.__class__.__name__ + '.adjust_before')
-        if adjust_func:
-            return adjust_func(self)
+        pass
 
+    @overrideable
     def adjust_after(self):
-        # TODO: replace string 'adjust_after' with function name
-        # introspection?
-        adjust_func = self.pipeline.registry.get(self.__class__.__name__ + '.adjust_after')
-        if adjust_func:
-            return adjust_func(self)
+        pass
 
+    @overrideable
     def run(self):
         self.adjust_before()
         self.tick_data['num_ios'] = len(self)
