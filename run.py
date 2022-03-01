@@ -27,21 +27,23 @@ def storage_latency1(self, original):
     return self.base_completion_latency
 
 # For now, you must specify whole numbers for Duration and Rate
-storage = Storage(
+storages = [
+    Storage(
             completion_latency_func = storage_latency1,
             base_completion_latency=Duration(microseconds=400),
             submission_overhead=Duration(microseconds=10),
             max_iops=100,
             cap_inflight=100,
             cap_in_progress=200,
-            )
+            ),
+    ]
 
 
-def consumption_rate_func(self, original):
+def consumption_rate_func1(self, original):
     if self.counter <= 100:
         return Rate(per_second=10000)
     if self.counter > 100:
-        return Rate(per_second=20000)
+        return Rate(per_second=5000)
 
 def consumption_rate_func2(self, original):
     if self.tick <= 5000:
@@ -50,11 +52,18 @@ def consumption_rate_func2(self, original):
         rate = Rate(per_second=20000)
         return rate
 
-workload = Workload(
+workloads = [
+    Workload(
                 consumption_rate_func=consumption_rate_func2,
                 volume=100,
                 duration=Duration(seconds=2),
+                ),
+    Workload(
+                consumption_rate_func=consumption_rate_func1,
+                volume=100,
+                duration=Duration(seconds=2),
                 )
+    ]
 
 
 def prefetch_size1(self, original):
@@ -92,6 +101,16 @@ def adjust1(self, original):
         desired_completion_target_distance = self.pipeline.completion_target_distance + 1
         self.pipeline.completion_target_distance = min(desired_completion_target_distance, self.pipeline.cap_in_progress)
 
+def adjust2(self, original):
+    inflight = len(self.pipeline.inflight_bucket)
+    consumed_total = self.pipeline.consumed_bucket.counter
+
+    if consumed_total == 0:
+        return
+
+    desired_target_inflight = self.pipeline.target_inflight + 1
+    self.pipeline.target_inflight = min(desired_target_inflight,
+                                        self.pipeline.cap_inflight)
 
 prefetchers = [
             Prefetcher(
@@ -107,7 +126,7 @@ prefetchers = [
             Prefetcher(
                           prefetch_size_func=prefetch_size1,
                           adjusters = {
-                                        'prefetched.adjust_before' : adjust1,
+                                        'prefetched.adjust_before' : adjust2,
                                       },
                           min_dispatch=2,
                           initial_completion_target_distance=15,
@@ -115,17 +134,19 @@ prefetchers = [
                     )
             ]
 
-for prefetcher in prefetchers:
-    pipeline_config = PipelineConfiguration(
-        storage=storage,
-        workload=workload,
-        prefetcher=prefetcher,
-    )
+for storage in storages:
+    for workload in workloads:
+        for prefetcher in prefetchers:
+            pipeline_config = PipelineConfiguration(
+                storage=storage,
+                workload=workload,
+                prefetcher=prefetcher,
+            )
 
-    print(f'config is:\n{pipeline_config}')
+            print(f'config is:\n{pipeline_config}')
 
-    pipeline = pipeline_config.generate_pipeline()
+            pipeline = pipeline_config.generate_pipeline()
 
-    data = pipeline.run(workload)
+            data = pipeline.run(workload)
 
-    do_plot(data)
+            do_plot(data)
