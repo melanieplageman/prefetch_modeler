@@ -43,6 +43,9 @@ class Pipeline:
 
             next_tick = min([bucket.next_action() for bucket in self.buckets])
 
+            if next_tick == math.inf:
+                break
+
             if next_tick <= last_tick:
                 raise ValueError(f'Next action tick request {next_tick} is older than last action tick {last_tick}.')
             last_tick = next_tick
@@ -161,6 +164,8 @@ class GateBucket(Bucket):
     def to_move(self):
         size = self.wanted_move_size()
         self.tick_data['want_to_move'] = size
+        if size == math.inf:
+            return frozenset(self.source)
         return frozenset(itertools.islice(self.source, size))
 
 

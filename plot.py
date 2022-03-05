@@ -9,10 +9,10 @@ def transform(data):
 
     # TODO: what is a good way to skip ticks that aren't there
     last_wait = 0
-    for i in range(len(to_plot['wait'])):
+    for idx, waited in enumerate(to_plot['wait']):
         try:
-            last_wait = last_wait + 1 if to_plot['wait'][i] else 0
-            to_plot['wait'][i] = last_wait
+            last_wait = last_wait + 1 if waited else 0
+            to_plot['wait'][idx] = last_wait
         except: KeyError
 
     to_plot['completed'] = data['completed_num_ios']

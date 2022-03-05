@@ -1,5 +1,6 @@
 from enum import Enum, auto
 from fractions import Fraction
+import math
 
 class Unit(Enum):
     MICROSECOND = auto()
@@ -13,6 +14,13 @@ class Duration:
     # TODO: make this say per unit
     def __str__(self):
         return f'{self.total} microseconds'
+
+class InfiniteRate:
+    def __init__(self):
+        self.value = math.inf
+
+    def __str__(self):
+        return 'Infinity'
 
 class Rate:
     def __init__(self, per_microsecond=0, per_millisecond=0, per_second=0):

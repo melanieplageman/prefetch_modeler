@@ -1,5 +1,5 @@
 from configurer import PipelineConfiguration, Prefetcher, Storage, Workload
-from units import Rate, Duration
+from units import Rate, Duration, InfiniteRate
 from plot import do_plot
 
 def algo_logger(prefetch_bucket):
@@ -52,10 +52,13 @@ def consumption_rate_func2(self, original):
         rate = Rate(per_second=20000)
         return rate
 
+def consumption_rate_func3(self, original):
+    return InfiniteRate()
+
 workloads = [
     Workload(
-                consumption_rate_func=consumption_rate_func2,
-                volume=100,
+                consumption_rate_func=consumption_rate_func3,
+                volume=1000,
                 duration=Duration(seconds=2),
                 ),
     Workload(
