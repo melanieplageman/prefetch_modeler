@@ -6,6 +6,7 @@ from override import Overrideable, overrideable
 
 
 LOG_BUCKETS = False
+DEBUG = False
 
 class IO: pass
 
@@ -31,7 +32,7 @@ class Pipeline:
 
         next_tick = 0
         last_tick = 0
-        while True:
+        while next_tick != math.inf:
             for bucket in self.buckets:
                 bucket.tick = next_tick
 
@@ -41,13 +42,18 @@ class Pipeline:
             if len(self.buckets[-1]) == workload.volume:
                 break
 
-            next_tick = min([bucket.next_action() for bucket in self.buckets])
+            actionable = {
+                bucket.name: bucket.next_action() for bucket in self.buckets
+            }
+            bucket_name, next_tick = min(
+                actionable.items(),
+                key=lambda item: item[1])
 
-            if next_tick == math.inf:
-                break
+            if DEBUG and next_tick - last_tick == 1:
+                print(last_tick, actionable)
 
             if next_tick <= last_tick:
-                raise ValueError(f'Next action tick request {next_tick} is older than last action tick {last_tick}.')
+                raise ValueError(f'Next action tick request {next_tick} (from {bucket_name}) is older than last action tick {last_tick}.')
             last_tick = next_tick
 
             if workload.duration and next_tick > workload.duration:
