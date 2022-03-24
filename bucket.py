@@ -208,7 +208,7 @@ class DialBucket(Bucket):
 
     def next_action(self):
         if not self.source:
-            return self.tick + 1
+            return math.inf
         return min(io.move_at for io in self.source if io.move_at)
 
     def to_move(self):

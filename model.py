@@ -68,9 +68,9 @@ class InflightBucket(DialBucket):
         return int(self.base_completion_latency + (0.01 * len(self)))
 
 
+# TODO: Turn into a subclass of bucket instead
 class CompleteBucket(GateBucket):
     def __init__(self, *args, **kwargs):
-        self._next_consumption = 0
         self._consumption_interval = 0
         self._last_consumption = 0
         super().__init__(*args, **kwargs)
@@ -79,55 +79,30 @@ class CompleteBucket(GateBucket):
     def consumption_rate(self):
         return Rate(per_second=1000)
 
-    def next_action(self):
-        # Because consumption rate can be based on time elapsed, it must be
-        # recalculated on every tick (as opposed to on every consumption) in
-        # case it would change whether or not a consumption is required on this
-        # tick.
+    def wanted_move_size(self):
+        # Consumption rate may change based on time elapsed or blocks consumed.
         consumption_rate = self.consumption_rate().value
-
-        # Special case is an infinite consumption rate, modeling an IO-bound
-        # workload
-        if consumption_rate == math.inf:
-            self._consumption_interval = 1
-            self._next_consumption = self.tick + 1
-            return self._next_consumption
-
         if consumption_rate >= 1:
             raise ValueError(f'Value {self.consumption_rate} exceeds maximum consumption rate of 1 IO per microsecond. Try a slower rate.')
+        self._consumption_interval = int(1 / consumption_rate)
 
-        consumption_interval = int(1 / consumption_rate)
-
-        # Consumption rate may change based on time elapsed or blocks consumed.
-        if self._consumption_interval != consumption_interval:
-            self._consumption_interval = consumption_interval
-            self._next_consumption = max(self.tick + 1, self._last_consumption + self._consumption_interval)
-
-        return self._next_consumption
-
-    def wanted_move_size(self):
         # If it is not time to consume, we don't want to move any IOs
-        if self.tick != self._next_consumption:
+        if self.tick < self._last_consumption + self._consumption_interval:
             return 0
 
-        # TODO: this probably needs to go outside of this function since this
-        # returns what we want and shouldn't know about what we have?
-
-        # we want to consume and we can
-        # though doing this consumption may mean that our consumption rate
-        # changes since consumption rate can be based on # requests consumed,
-        # we will anyway recalculate the consumption rate on every tick, so we
-        # will find out then.
+        # we want to consume and we can. though doing this consumption may mean
+        # that our consumption rate changes since consumption rate can be based
+        # on # requests consumed,
         if len(self):
             self._last_consumption = self.tick
-            self._next_consumption += self._consumption_interval
+        return 1
 
-        # We want to consume but there are no completed IOs to move, this is a
-        # wait and we'll try again next tick.
-        else:
-            self._next_consumption += 1
-
-        if self.consumption_rate().value == math.inf:
+    def next_action(self):
+        if not self.source:
             return math.inf
 
-        return 1
+        # self._last_consumption + self._consumption_interval is the next tick
+        # that this bucket should consume, if this bucket has been full since
+        # the last time it consumed.
+        return max(self._last_consumption + self._consumption_interval,
+                   self.tick + 1)
