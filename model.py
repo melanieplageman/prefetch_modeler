@@ -56,62 +56,30 @@ class PrefetchBucket(GateBucket):
 
 
 class SubmitBucket(DialBucket):
-    LATENCY = 1
-
-# Remember next_action() is infinity but is actually whenever InflightBucket
-# has its next action, so, if we ever try to be clever about executing some
-# buckets and not others, we'll have to handle this
-class WaitBucket(GateBucket):
-    def wanted_move_size(self):
-        return min(len(self), max(0, self.target.max_iops - len(self.target)))
-
-class InflightBucket(DialBucket):
     def __init__(self, *args, **kwargs):
-        self.max_iops = 10
+        self.submission_overhead = 1
+        super().__init__(*args, **kwargs)
+
+
+class InflightLatencyBucket(DialBucket):
+    def __init__(self, *args, **kwargs):
         self.base_completion_latency = 1
         super().__init__(*args, **kwargs)
 
-    @overrideable
-    def latency(self):
-        # TODO: make this formula better
-        return int(self.base_completion_latency + (0.01 * len(self)))
 
-
-# TODO: Turn into a subclass of bucket instead
-class CompleteBucket(GateBucket):
+class InflightRateBucket(RateBucket):
     def __init__(self, *args, **kwargs):
-        self._consumption_interval = 0
-        self._last_consumption = 0
+        self.max_iops = 10
         super().__init__(*args, **kwargs)
 
+    def rate(self):
+        return Rate(per_second=self.max_iops).value
+
+
+class CompleteBucket(RateBucket):
     @overrideable
     def consumption_rate(self):
         return Rate(per_second=1000)
 
-    def wanted_move_size(self):
-        # Consumption rate may change based on time elapsed or blocks consumed.
-        consumption_rate = self.consumption_rate().value
-        if consumption_rate >= 1:
-            raise ValueError(f'Value {self.consumption_rate} exceeds maximum consumption rate of 1 IO per microsecond. Try a slower rate.')
-        self._consumption_interval = int(1 / consumption_rate)
-
-        # If it is not time to consume, we don't want to move any IOs
-        if self.tick < self._last_consumption + self._consumption_interval:
-            return 0
-
-        # we want to consume and we can. though doing this consumption may mean
-        # that our consumption rate changes since consumption rate can be based
-        # on # requests consumed,
-        if len(self):
-            self._last_consumption = self.tick
-        return 1
-
-    def next_action(self):
-        if not self.source:
-            return math.inf
-
-        # self._last_consumption + self._consumption_interval is the next tick
-        # that this bucket should consume, if this bucket has been full since
-        # the last time it consumed.
-        return max(self._last_consumption + self._consumption_interval,
-                   self.tick + 1)
+    def rate(self):
+        return self.consumption_rate().value

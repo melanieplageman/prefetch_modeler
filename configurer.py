@@ -1,23 +1,43 @@
 from dataclasses import dataclass
 from typing import Callable
 from model import TestPipeline
-from units import Duration
+from units import Duration, BaseRate
+import json
+
 
 class Configuration:
     def __str__(self):
         return '\n'.join(f'{k}: {v.__name__ if callable(v) else v}' for k, v in self.__dict__.items())
 
+    def dictified(self):
+        def dictify(mydict):
+            newdict = {}
+            for k, v in mydict.items():
+                if isinstance(v, dict):
+                    newdict[k] = dictify(v)
+                elif isinstance(v, Duration):
+                    newdict[k] = v.total
+                elif isinstance(v, BaseRate):
+                    newdict[k] = v.value
+                elif callable(v):
+                    newdict[k] = v.__name__
+                else:
+                    newdict[k] = v
+            return newdict
+
+        return dictify(self.__dict__)
+
 @dataclass
 class Storage(Configuration):
     completion_latency_func : Callable
-    base_completion_latency : Duration
-    submission_overhead : Duration
+    submission_overhead_func: Callable
     max_iops : int
     cap_inflight : int
     cap_in_progress : int
 
     def configure_pipeline(self, pipeline):
-        pipeline.override('inflight.latency', self.completion_latency_func)
+        pipeline.override('inflight_latency.latency', self.completion_latency_func)
+        pipeline.override('submitted.latency', self.submission_overhead_func)
 
 
 @dataclass
@@ -58,6 +78,11 @@ class PipelineConfiguration:
 
     def __str__(self):
         return '\n\n'.join(f'{k}:\n{str(v)}' for k, v in self.__dict__.items())
+
+    # TODO: work on figuring out how this will integrate with display
+    def to_dict(self):
+        # Loop through each configuration object (e.g. storage), dictifying it
+        return {k: v.dictified() for k, v in self.__dict__.items()}
 
     def generate_pipeline(self, *args, **kwargs):
         pipeline = TestPipeline()

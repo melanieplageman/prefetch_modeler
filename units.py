@@ -11,18 +11,23 @@ class Duration:
     def __init__(self, microseconds=0, milliseconds=0, seconds=0):
         self.total = microseconds + (milliseconds * 1000) + (seconds * 1000 * 1000)
 
-    # TODO: make this say per unit
+    # TODO: make this do per unit and get rid of post_init in workload so this
+    # looks correct in output
     def __str__(self):
         return f'{self.total} microseconds'
 
-class InfiniteRate:
+class BaseRate:
+    def __init__(self):
+        self.value = None
+
+class InfiniteRate(BaseRate):
     def __init__(self):
         self.value = math.inf
 
     def __str__(self):
         return 'Infinity'
 
-class Rate:
+class Rate(BaseRate):
     def __init__(self, per_microsecond=0, per_millisecond=0, per_second=0):
         if per_microsecond:
             if per_millisecond or per_second:
