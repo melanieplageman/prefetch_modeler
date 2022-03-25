@@ -1,4 +1,4 @@
-from bucket import Pipeline, GateBucket, DialBucket, IntakeBucket, StopBucket
+from bucket import Pipeline, GateBucket, DialBucket, IntakeBucket, StopBucket, RateBucket
 from units import Rate
 from override import overrideable
 import math
@@ -9,8 +9,8 @@ class TestPipeline(Pipeline):
         self.intake = IntakeBucket("intake", self)
         self.prefetched_bucket = PrefetchBucket("prefetched", self)
         self.submitted_bucket = SubmitBucket("submitted", self)
-        self.waited_bucket = WaitBucket("waited", self)
-        self.inflight_bucket = InflightBucket("inflight", self)
+        self.inflight_bucket = InflightRateBucket("inflight", self)
+        self.inflight_latency_bucket = InflightLatencyBucket("inflight_latency", self)
         self.completed_bucket = CompleteBucket("completed", self)
         self.consumed_bucket = StopBucket("consumed", self)
 
@@ -19,25 +19,34 @@ class TestPipeline(Pipeline):
         self.min_dispatch = 2
         self.target_inflight = 10
 
+        self.cnc_ctd_ratio = 1
+
 
         super().__init__(self.intake, self.prefetched_bucket,
-                         self.submitted_bucket, self.waited_bucket,
+                         self.submitted_bucket,
                          self.inflight_bucket,
+                         self.inflight_latency_bucket,
                          self.completed_bucket, self.consumed_bucket)
 
 class PrefetchBucket(GateBucket):
-    @overrideable
     def wanted_move_size(self):
-        inflight = len(self.pipeline.inflight_bucket)
+        # TODO: make this consider submitted, waiting to be inflight, and
+        # inflight?
+        total_inflight = len(self.pipeline.inflight_bucket) + len(self.pipeline.inflight_latency_bucket)
         completed_not_consumed = len(self.pipeline.completed_bucket)
 
-        if inflight >= self.pipeline.target_inflight:
+        if total_inflight >= self.pipeline.target_inflight - self.min_dispatch:
             return 0
 
-        if completed_not_consumed >= self.pipeline.completion_target_distance - self.min_dispatch:
+        if completed_not_consumed + total_inflight + self.min_dispatch >= self.pipeline.completion_target_distance:
             return 0
 
-        return self.min_dispatch
+        target = self.pipeline.completion_target_distance - total_inflight - completed_not_consumed
+
+        target = max(self.min_dispatch, target)
+        to_submit = min(self.pipeline.target_inflight - total_inflight, target)
+        # print(f'target: {target}. min_dispatch: {self.min_dispatch}. target inflight: {self.pipeline.target_inflight}. total_inflight: {total_inflight}. to_submit is {to_submit}')
+        return to_submit
 
     def run(self):
         super().run()

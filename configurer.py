@@ -26,8 +26,13 @@ class Workload(Configuration):
     volume : int
     duration : Duration
 
+    # TODO: make Duration a timedelta
     def __post_init__(self):
         self.duration = self.duration.total if self.duration else None
+
+    @property
+    def tick_duration(self):
+        return self.duration.total if self.duration else None
 
     def configure_pipeline(self, pipeline):
         pipeline.override('completed.consumption_rate', self.consumption_rate_func)
@@ -35,14 +40,12 @@ class Workload(Configuration):
 
 @dataclass
 class Prefetcher(Configuration):
-    prefetch_size_func : Callable
     adjusters : dict
     min_dispatch : int
     initial_completion_target_distance : int
     initial_target_inflight : int
 
     def configure_pipeline(self, pipeline):
-        pipeline.override('prefetched.wanted_move_size', self.prefetch_size_func)
         for k, v in self.adjusters.items():
             pipeline.override(k, v)
 
@@ -59,11 +62,10 @@ class PipelineConfiguration:
     def generate_pipeline(self, *args, **kwargs):
         pipeline = TestPipeline()
 
-        pipeline.submitted_bucket.LATENCY = self.storage.submission_overhead.total
-
         pipeline.inflight_bucket.max_iops = self.storage.max_iops
-        pipeline.inflight_bucket.base_completion_latency = self.storage.base_completion_latency.total
 
+        if self.storage.cap_inflight > self.storage.max_iops:
+            raise ValueError(f'cap_inflight cannot exceed max_iops')
         pipeline.cap_inflight = self.storage.cap_inflight
         pipeline.cap_in_progress = self.storage.cap_in_progress
         pipeline.prefetched_bucket.min_dispatch = self.prefetcher.min_dispatch
