@@ -87,13 +87,13 @@ class PipelineConfiguration:
     def generate_pipeline(self, *args, **kwargs):
         pipeline = TestPipeline()
 
-        pipeline.inflight_bucket.max_iops = self.storage.max_iops
+        pipeline['inflight'].max_iops = self.storage.max_iops
 
         if self.storage.cap_inflight > self.storage.max_iops:
             raise ValueError(f'cap_inflight cannot exceed max_iops')
         pipeline.cap_inflight = self.storage.cap_inflight
         pipeline.cap_in_progress = self.storage.cap_in_progress
-        pipeline.prefetched_bucket.min_dispatch = self.prefetcher.min_dispatch
+        pipeline['prefetched'].min_dispatch = self.prefetcher.min_dispatch
 
         if self.prefetcher.initial_completion_target_distance > self.storage.cap_in_progress:
             raise ValueError(f'Value {self.prefetcher.initial_completion_target_distance} for ' f'completion_target_distance exceeds cap_in_progress ' f'value of {self.storage.cap_in_progress}.')

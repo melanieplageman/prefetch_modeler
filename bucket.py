@@ -12,17 +12,34 @@ class IO: pass
 
 
 class Pipeline:
+    template = []
+
     def __init__(self, *args):
-        self.buckets = list(args)
+        self.buckets = [bucket_type(name, self) for name, bucket_type in self.template]
+        self.buckets.extend(args)
 
         for i in range(len(self.buckets) - 1):
             self.buckets[i].target = self.buckets[i + 1]
+
+    def __getitem__(self, bucket_name):
+        for bucket in self.buckets:
+            if bucket.name == bucket_name:
+                return bucket
+        raise KeyError(repr(bucket_name))
+
+    @classmethod
+    def bucket(cls, name):
+        """Define a bucket to be added to the pipeline on initialization."""
+        def call(bucket_type):
+            cls.template.append((name, bucket_type))
+            return bucket_type
+        return call
 
     @property
     def data(self):
         """Return the tick joined data of each bucket in the pipeline."""
         data = self.buckets[0].data.add_prefix(self.buckets[0].name)
-        for bucket in self.buckets[1:]:
+        for bucket in self.buckets:
             data = data.join(bucket.data.add_prefix(f"{bucket.name}_"))
         return data
 

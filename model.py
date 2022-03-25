@@ -3,17 +3,9 @@ from units import Rate
 from override import overrideable
 import math
 
+
 class TestPipeline(Pipeline):
     def __init__(self):
-
-        self.intake = IntakeBucket("intake", self)
-        self.prefetched_bucket = PrefetchBucket("prefetched", self)
-        self.submitted_bucket = SubmitBucket("submitted", self)
-        self.inflight_bucket = InflightRateBucket("inflight", self)
-        self.inflight_latency_bucket = InflightLatencyBucket("inflight_latency", self)
-        self.completed_bucket = CompleteBucket("completed", self)
-        self.consumed_bucket = StopBucket("consumed", self)
-
         # variables for prefetch algorithm under test
         self.completion_target_distance = 512
         self.min_dispatch = 2
@@ -21,19 +13,16 @@ class TestPipeline(Pipeline):
 
         self.cnc_ctd_ratio = 1
 
+        super().__init__()
 
-        super().__init__(self.intake, self.prefetched_bucket,
-                         self.submitted_bucket,
-                         self.inflight_bucket,
-                         self.inflight_latency_bucket,
-                         self.completed_bucket, self.consumed_bucket)
 
+@TestPipeline.bucket('prefetched')
 class PrefetchBucket(GateBucket):
     def wanted_move_size(self):
         # TODO: make this consider submitted, waiting to be inflight, and
         # inflight?
-        total_inflight = len(self.pipeline.inflight_bucket) + len(self.pipeline.inflight_latency_bucket)
-        completed_not_consumed = len(self.pipeline.completed_bucket)
+        total_inflight = len(self.pipeline['inflight']) + len(self.pipeline['inflight_latency'])
+        completed_not_consumed = len(self.pipeline['completed'])
 
         if total_inflight >= self.pipeline.target_inflight - self.min_dispatch:
             return 0
@@ -55,18 +44,14 @@ class PrefetchBucket(GateBucket):
         self.tick_data['min_dispatch'] = self.min_dispatch
 
 
+@TestPipeline.bucket('submitted')
 class SubmitBucket(DialBucket):
     def __init__(self, *args, **kwargs):
         self.submission_overhead = 1
         super().__init__(*args, **kwargs)
 
 
-class InflightLatencyBucket(DialBucket):
-    def __init__(self, *args, **kwargs):
-        self.base_completion_latency = 1
-        super().__init__(*args, **kwargs)
-
-
+@TestPipeline.bucket('inflight')
 class InflightRateBucket(RateBucket):
     def __init__(self, *args, **kwargs):
         self.max_iops = 10
@@ -76,6 +61,14 @@ class InflightRateBucket(RateBucket):
         return Rate(per_second=self.max_iops).value
 
 
+@TestPipeline.bucket('inflight_latency')
+class InflightLatencyBucket(DialBucket):
+    def __init__(self, *args, **kwargs):
+        self.base_completion_latency = 1
+        super().__init__(*args, **kwargs)
+
+
+@TestPipeline.bucket('completed')
 class CompleteBucket(RateBucket):
     @overrideable
     def consumption_rate(self):
@@ -83,3 +76,6 @@ class CompleteBucket(RateBucket):
 
     def rate(self):
         return self.consumption_rate().value
+
+
+TestPipeline.bucket('consumed')(StopBucket)

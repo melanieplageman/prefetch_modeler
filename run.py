@@ -59,9 +59,9 @@ workloads = [
 
 def adjust1(self, original):
     base_ctd_decrease = 0.2
-    inflight = len(self.pipeline.inflight_bucket)
-    completed_not_consumed = len(self.pipeline.completed_bucket)
-    consumed_total = self.pipeline.consumed_bucket.counter
+    inflight = len(self.pipeline['inflight'])
+    completed_not_consumed = len(self.pipeline['completed'])
+    consumed_total = self.pipeline['consumed'].counter
 
     if consumed_total == 0:
         return
@@ -116,5 +116,6 @@ for storage in storages:
             pipeline = pipeline_config.generate_pipeline()
 
             data = pipeline.run(workload)
+            print(data)
             # print(f"{to_row(data)}\n")
             do_plot(data)
