@@ -38,8 +38,10 @@ class Pipeline:
     @property
     def data(self):
         """Return the tick joined data of each bucket in the pipeline."""
-        data = self.buckets[0].data.add_prefix(self.buckets[0].name)
-        for bucket in self.buckets:
+        # TODO: Make a new dataframe with just the index column? So that we
+        # don't have to special case the first bucket?
+        data = self.buckets[0].data.add_prefix(f"{self.buckets[0].name}_")
+        for bucket in self.buckets[1:]:
             data = data.join(bucket.data.add_prefix(f"{bucket.name}_"))
         return data
 
@@ -271,9 +273,10 @@ class RateBucket(Bucket):
         self.interval = None
         super().__init__(*args, **kwargs)
 
+    @overrideable
     def rate(self):
         """The rate that the bucket should operate on."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @property
     def movement_size(self):
@@ -326,3 +329,28 @@ class RateBucket(Bucket):
         # that this bucket should consume, if this bucket has been full since
         # the last time it consumed.
         return max(self.slot[0] + self.interval, self.tick + 1)
+
+
+class CapacityBucket(GateBucket):
+    """
+    A bucket which moves as many IOs as possible without exceeding its target's
+    capacity
+    """
+
+    @overrideable
+    def capacity(self):
+        # This expresses the capacity of the target bucket into which IOs are
+        # moved by this bucket.
+        raise NotImplementedError()
+
+    def wanted_move_size(self):
+        return max(self.capacity() - len(self.target), 0)
+
+    def next_action(self):
+        if not self.source:
+            return math.inf
+
+        if len(self.target) < self.capacity():
+            return self.tick + 1
+
+        return math.inf

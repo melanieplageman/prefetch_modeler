@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable
+from fractions import Fraction
+
 from model import TestPipeline
 from units import Duration, BaseRate
 import json
@@ -31,13 +33,17 @@ class Configuration:
 class Storage(Configuration):
     completion_latency_func : Callable
     submission_overhead_func: Callable
-    max_iops : int
-    cap_inflight : int
+    max_iops : Fraction
     cap_in_progress : int
 
     def configure_pipeline(self, pipeline):
         pipeline.override('inflight_latency.latency', self.completion_latency_func)
         pipeline.override('submitted.latency', self.submission_overhead_func)
+
+        def calculate_capacity(bucket, original):
+            result = self.completion_latency_func(bucket, original) * self.max_iops
+            return int(result)
+        pipeline.override('inflight.capacity', calculate_capacity)
 
 
 @dataclass
@@ -55,7 +61,7 @@ class Workload(Configuration):
         return self.duration.total if self.duration else None
 
     def configure_pipeline(self, pipeline):
-        pipeline.override('completed.consumption_rate', self.consumption_rate_func)
+        pipeline.override('completed.rate', self.consumption_rate_func)
 
 
 @dataclass
@@ -87,11 +93,6 @@ class PipelineConfiguration:
     def generate_pipeline(self, *args, **kwargs):
         pipeline = TestPipeline()
 
-        pipeline['inflight'].max_iops = self.storage.max_iops
-
-        if self.storage.cap_inflight > self.storage.max_iops:
-            raise ValueError(f'cap_inflight cannot exceed max_iops')
-        pipeline.cap_inflight = self.storage.cap_inflight
         pipeline.cap_in_progress = self.storage.cap_in_progress
         pipeline['prefetched'].min_dispatch = self.prefetcher.min_dispatch
 
@@ -99,10 +100,6 @@ class PipelineConfiguration:
             raise ValueError(f'Value {self.prefetcher.initial_completion_target_distance} for ' f'completion_target_distance exceeds cap_in_progress ' f'value of {self.storage.cap_in_progress}.')
 
         pipeline.completion_target_distance = self.prefetcher.initial_completion_target_distance
-
-
-        if self.prefetcher.initial_target_inflight > self.storage.cap_inflight:
-            raise ValueError(f'Value {self.prefetcher.initial_target_inflight} for target_inflight ' f'exceeds cap_inflight of {self.storage.cap_inflight}.')
 
         pipeline.target_inflight = self.prefetcher.initial_target_inflight
 
