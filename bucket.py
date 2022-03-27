@@ -3,6 +3,7 @@ import itertools
 import pandas as pd
 import math
 from override import Overrideable, overrideable
+import warnings
 
 
 LOG_BUCKETS = False
@@ -90,7 +91,7 @@ class Pipeline:
             if bucket.name == bucket_name:
                 break
         else:
-            raise ValueError(f'No such bucket {bucket_name!r}')
+            warnings.warn(f'Warning: Cannot override function {function_name!r}() for bucket {bucket_name!r}. No such bucket.')
 
         bucket.override[function_name] = function
 
@@ -181,13 +182,8 @@ class Bucket(Overrideable, collections.abc.MutableSet):
 class GateBucket(Bucket):
     """A bucket that will move a specified number of IOs."""
 
-    MOVEMENT_SIZE = None
-
     def wanted_move_size(self):
         """The number of IOs to move on this tick."""
-
-        if self.MOVEMENT_SIZE is not None:
-            return self.MOVEMENT_SIZE
         raise NotImplementedError()
 
     def to_move(self):
@@ -196,16 +192,6 @@ class GateBucket(Bucket):
         if size == math.inf:
             return frozenset(self.source)
         return frozenset(itertools.islice(self.source, size))
-
-
-class FlipFlopGateBucket(GateBucket):
-    """A bucket will either move a specified number of IOs or none of them."""
-
-    def is_on(self):
-        raise NotImplementedError()
-
-    def wanted_move_size(self):
-        return self.wanted_move_size() if self.is_on() else 0
 
 
 class DialBucket(Bucket):
@@ -232,16 +218,6 @@ class DialBucket(Bucket):
 
     def to_move(self):
         return frozenset(io for io in self.source if io.move_at <= self.tick)
-
-
-class IntakeBucket(Bucket):
-    """A bucket that will move each IO on each tick."""
-
-    def next_action(self):
-        return self.tick + 1 if len(self.source) else math.inf
-
-    def to_move(self):
-        return frozenset(self.source)
 
 
 class StopBucket(Bucket):
