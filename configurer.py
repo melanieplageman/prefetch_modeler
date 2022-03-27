@@ -35,16 +35,11 @@ class Storage(Configuration):
     kernel_invoke_batch_size: int
     submission_overhead_func: Callable
     max_iops : Fraction
-    cap_in_progress : int
 
     def configure_pipeline(self, pipeline):
         pipeline.override('inflight_latency.latency', self.completion_latency_func)
         pipeline.override('submitted.latency', self.submission_overhead_func)
 
-        def cap_in_progress(bucket, original):
-            return self.cap_in_progress
-
-        pipeline.override('ringmaster.cap_in_progress', cap_in_progress)
 
         def threshold(bucket, original):
             return self.kernel_invoke_batch_size
@@ -70,24 +65,34 @@ class Workload(Configuration):
     def __post_init__(self):
         self.duration = self.duration.total if self.duration else None
 
-    @property
-    def tick_duration(self):
-        return self.duration.total if self.duration else None
-
     def configure_pipeline(self, pipeline):
         pipeline.override('completed.rate', self.consumption_rate_func)
 
 
 @dataclass
 class Prefetcher(Configuration):
-    adjusters : dict
+    prefetch_num_ios_func : Callable
+    adjust_func : Callable
     min_dispatch : int
     initial_completion_target_distance : int
-    initial_target_inflight : int
+    cap_in_progress : int
 
     def configure_pipeline(self, pipeline):
-        for k, v in self.adjusters.items():
-            pipeline.override(k, v)
+        if self.initial_completion_target_distance > self.cap_in_progress:
+            raise ValueError(f'Value {self.initial_completion_target_distance} for ' f'completion_target_distance exceeds cap_in_progress ' f'value of {self.cap_in_progress}.')
+
+        pipeline.cap_in_progress = self.cap_in_progress
+        pipeline.completion_target_distance = self.initial_completion_target_distance
+
+        pipeline.override('prefetched.wanted_move_size', self.prefetch_num_ios_func)
+
+        def min_dispatch(bucket, original):
+            return self.min_dispatch
+
+        pipeline.override('prefetched.min_dispatch', min_dispatch)
+
+        if self.adjust_func is not None:
+            pipeline.override('prefetched.adjust', self.adjust_func)
 
 
 class PipelineConfiguration:
@@ -106,16 +111,6 @@ class PipelineConfiguration:
 
     def generate_pipeline(self, *args, **kwargs):
         pipeline = TestPipeline()
-
-        pipeline.cap_in_progress = self.storage.cap_in_progress
-        pipeline['prefetched'].min_dispatch = self.prefetcher.min_dispatch
-
-        if self.prefetcher.initial_completion_target_distance > self.storage.cap_in_progress:
-            raise ValueError(f'Value {self.prefetcher.initial_completion_target_distance} for ' f'completion_target_distance exceeds cap_in_progress ' f'value of {self.storage.cap_in_progress}.')
-
-        pipeline.completion_target_distance = self.prefetcher.initial_completion_target_distance
-
-        pipeline.target_inflight = self.prefetcher.initial_target_inflight
 
         self.storage.configure_pipeline(pipeline)
         self.workload.configure_pipeline(pipeline)
