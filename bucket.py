@@ -307,6 +307,22 @@ class RateBucket(Bucket):
         return max(self.slot[0] + self.interval, self.tick + 1)
 
 
+class ThresholdBucket(Bucket):
+    @overrideable
+    def threshold(self):
+        raise NotImplementedError()
+
+    def to_move(self):
+        if len(self) < self.threshold():
+            return frozenset()
+        return frozenset(self.source)
+
+    def next_action(self):
+        if len(self) >= self.threshold():
+            return self.tick + 1
+        return math.inf
+
+
 class CapacityBucket(GateBucket):
     """
     A bucket which moves as many IOs as possible without exceeding its target's

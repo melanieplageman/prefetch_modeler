@@ -32,6 +32,7 @@ class Configuration:
 @dataclass
 class Storage(Configuration):
     completion_latency_func : Callable
+    kernel_invoke_batch_size: int
     submission_overhead_func: Callable
     max_iops : Fraction
     cap_in_progress : int
@@ -40,9 +41,22 @@ class Storage(Configuration):
         pipeline.override('inflight_latency.latency', self.completion_latency_func)
         pipeline.override('submitted.latency', self.submission_overhead_func)
 
+        def cap_in_progress(bucket, original):
+            return self.cap_in_progress
+
+        pipeline.override('ringmaster.cap_in_progress', cap_in_progress)
+
+        def threshold(bucket, original):
+            return self.kernel_invoke_batch_size
+
+        pipeline.override('invoked.threshold', threshold)
+
         def calculate_capacity(bucket, original):
-            result = self.completion_latency_func(bucket, original) * self.max_iops
-            return int(result)
+            capacity = self.completion_latency_func(bucket, original) * self.max_iops
+            capacity = int(capacity)
+            if capacity < 1:
+                raise ValueError("Capacity can't be less than 1")
+            return capacity
         pipeline.override('inflight.capacity', calculate_capacity)
 
 

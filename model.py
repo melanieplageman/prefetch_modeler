@@ -1,9 +1,10 @@
 from bucket import (
-    Pipeline, GateBucket, DialBucket, IntakeBucket, StopBucket, RateBucket,
-    CapacityBucket)
+    Pipeline, GateBucket, DialBucket, StopBucket, RateBucket,
+    CapacityBucket, ThresholdBucket)
 from units import Rate
 from override import overrideable
 import math
+import itertools
 
 
 class TestPipeline(Pipeline):
@@ -46,10 +47,36 @@ class TestPipeline(Pipeline):
 #         self.tick_data['min_dispatch'] = self.min_dispatch
 
 
-@TestPipeline.bucket('submitted')
-class SubmitBucket(DialBucket):
-    pass
+# @TestPipeline.bucket('submitted')
+# class SubmitBucket(DialBucket):
+#     pass
 
+@TestPipeline.bucket('test')
+class TestBucket(RateBucket):
+    def rate(self):
+        return Rate(per_millisecond=2).value
+
+@TestPipeline.bucket('ringmaster')
+class RingMaster(GateBucket):
+    @overrideable
+    def cap_in_progress(self):
+        raise NotImplementedError()
+
+    def wanted_move_size(self):
+        in_progress = self.target.counter - len(self.pipeline['consumed'])
+        self.tick_data['in_progress'] = in_progress
+        return max(self.cap_in_progress() - in_progress, 0)
+
+    def next_action(self):
+        in_progress = self.target.counter - len(self.pipeline['consumed'])
+        if in_progress < self.cap_in_progress():
+            return self.tick + 1
+        return math.inf
+
+
+@TestPipeline.bucket('invoked')
+class InvokeBucket(ThresholdBucket):
+    pass
 
 @TestPipeline.bucket('inflight')
 class InflightRateBucket(CapacityBucket):
