@@ -1,6 +1,6 @@
 from bucket import (
     Pipeline, GateBucket, DialBucket, StopBucket, RateBucket,
-    CapacityBucket, ThresholdBucket)
+    CapacityBucket, ThresholdBucket, Bucket, GlobalCapacityBucket)
 from units import Rate
 from override import overrideable
 import math
@@ -16,8 +16,17 @@ class TestPipeline(Pipeline):
         super().__init__()
 
 
-@TestPipeline.bucket('prefetched')
+# @TestPipeline.bucket('test')
+# class TestBucket(GateBucket):
+#     def wanted_move_size(self):
+#         return 10
+
+@TestPipeline.bucket('remaining')
 class AlgorithmBucket(GateBucket):
+    """
+    A bucket that will move the number of IOs specified by an algorithm, with
+    the option of modifying the algorithm on each run.
+    """
     @overrideable
     def min_dispatch(self):
         raise NotImplementedError()
@@ -36,36 +45,31 @@ class AlgorithmBucket(GateBucket):
         super().run()
 
 
-@TestPipeline.bucket('ringmaster')
-class RingMaster(GateBucket):
-    def wanted_move_size(self):
-        in_progress = self.target.counter - len(self.pipeline['consumed'])
-        self.tick_data['in_progress'] = in_progress
-        return max(min(self.pipeline.cap_in_progress - in_progress, len(self)), 0)
-
-    def next_action(self):
-        in_progress = self.target.counter - len(self.pipeline['consumed'])
-        if len(self) > 0 and in_progress < self.pipeline.cap_in_progress:
-            return self.tick + 1
-        return math.inf
+# @TestPipeline.bucket('awaiting_buffer')
+# class RingMaster(GlobalCapacityBucket):
+#     def system_slack(self):
+#         in_progress = self.target.counter - len(self.pipeline['consumed'])
+#         return max(self.pipeline.cap_in_progress - in_progress, 0)
 
 
-@TestPipeline.bucket('invoked')
-class InvokeBucket(ThresholdBucket):
-    pass
+# @TestPipeline.bucket('w_claimed_buffer')
+# class InvokeBucket(ThresholdBucket):
+#     pass
+
+
+# @TestPipeline.bucket('kernel_batch')
+# class SubmitBucket(DialBucket):
+#     pass
 
 
 @TestPipeline.bucket('submitted')
-class SubmitBucket(DialBucket):
-    pass
+class InflightRateBucket(CapacityBucket):
+    def to_move(self):
+        self.tick_data['capacity'] = self.capacity()
+        return super().to_move()
 
 
 @TestPipeline.bucket('inflight')
-class InflightRateBucket(CapacityBucket):
-    pass
-
-
-@TestPipeline.bucket('inflight_latency')
 class InflightLatencyBucket(DialBucket):
     pass
 

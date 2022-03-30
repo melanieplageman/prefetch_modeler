@@ -37,14 +37,14 @@ class Storage(Configuration):
     max_iops : Fraction
 
     def configure_pipeline(self, pipeline):
-        pipeline.override('inflight_latency.latency', self.completion_latency_func)
-        pipeline.override('submitted.latency', self.submission_overhead_func)
+        pipeline.override('inflight.latency', self.completion_latency_func)
+        pipeline.override('kernel_batch.latency', self.submission_overhead_func)
 
 
         def threshold(bucket, original):
             return self.kernel_invoke_batch_size
 
-        pipeline.override('invoked.threshold', threshold)
+        pipeline.override('w_claimed_buffer.threshold', threshold)
 
         def calculate_capacity(bucket, original):
             capacity = self.completion_latency_func(bucket, original) * self.max_iops
@@ -52,7 +52,7 @@ class Storage(Configuration):
             if capacity < 1:
                 raise ValueError("Capacity can't be less than 1")
             return capacity
-        pipeline.override('inflight.capacity', calculate_capacity)
+        pipeline.override('submitted.capacity', calculate_capacity)
 
 
 @dataclass
@@ -61,7 +61,6 @@ class Workload(Configuration):
     volume : int
     duration : Duration
 
-    # TODO: make Duration a timedelta
     def __post_init__(self):
         self.duration = self.duration.total if self.duration else None
 
@@ -84,15 +83,15 @@ class Prefetcher(Configuration):
         pipeline.cap_in_progress = self.cap_in_progress
         pipeline.completion_target_distance = self.initial_completion_target_distance
 
-        pipeline.override('prefetched.wanted_move_size', self.prefetch_num_ios_func)
+        pipeline.override('remaining.wanted_move_size', self.prefetch_num_ios_func)
 
         def min_dispatch(bucket, original):
             return self.min_dispatch
 
-        pipeline.override('prefetched.min_dispatch', min_dispatch)
+        pipeline.override('remaining.min_dispatch', min_dispatch)
 
         if self.adjust_func is not None:
-            pipeline.override('prefetched.adjust', self.adjust_func)
+            pipeline.override('remaining.adjust', self.adjust_func)
 
 
 class PipelineConfiguration:

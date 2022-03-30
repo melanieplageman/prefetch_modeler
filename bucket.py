@@ -308,6 +308,9 @@ class RateBucket(Bucket):
 
 
 class ThresholdBucket(Bucket):
+    """
+    A bucket which moves all IOs once a threshold is met.
+    """
     @overrideable
     def threshold(self):
         raise NotImplementedError()
@@ -323,20 +326,38 @@ class ThresholdBucket(Bucket):
         return math.inf
 
 
-class CapacityBucket(GateBucket):
+class GlobalCapacityBucket(Bucket):
+    """
+    A bucket which moves all its IOs to a max of system slack
+    """
+    @overrideable
+    def system_slack(self):
+        raise NotImplementedError()
+
+    def to_move(self):
+        return frozenset(itertools.islice(self.source, self.system_slack()))
+
+    def next_action(self):
+        if len(self) > 0 and self.system_slack() > 0:
+            return self.tick + 1
+        return math.inf
+
+
+
+class CapacityBucket(Bucket):
     """
     A bucket which moves as many IOs as possible without exceeding its target's
     capacity
     """
-
     @overrideable
     def capacity(self):
         # This expresses the capacity of the target bucket into which IOs are
         # moved by this bucket.
         raise NotImplementedError()
 
-    def wanted_move_size(self):
-        return max(self.capacity() - len(self.target), 0)
+    def to_move(self):
+        size = max(self.capacity() - len(self.target), 0)
+        return frozenset(itertools.islice(self.source, size))
 
     def next_action(self):
         if not self.source:
