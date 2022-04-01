@@ -96,7 +96,7 @@ class Pipeline:
             if bucket.name == bucket_name:
                 break
         else:
-            warnings.warn(f'Warning: Cannot override function {function_name!r}() for bucket {bucket_name!r}. No such bucket.')
+            warnings.warn(f'Cannot override function {function_name!r}() for bucket {bucket_name!r}. No such bucket.')
 
         bucket.override[function_name] = function
 
