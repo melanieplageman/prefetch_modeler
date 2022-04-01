@@ -10,9 +10,6 @@ LOG_BUCKETS = False
 DEBUG = False
 
 class IO:
-    def on_add(self, bucket):
-        pass
-
     def on_discard(self, bucket):
         pass
 
@@ -132,7 +129,6 @@ class Bucket(Overrideable, collections.abc.MutableSet):
 
     def add(self, io):
         self.counter += 1
-        io.on_add(self)
         self.source.add(io)
 
     def discard(self, io):

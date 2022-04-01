@@ -130,4 +130,7 @@ print(view)
 view.plot()
 plt.show()
 for tracer in workload.tracers:
-    print(tracer.trace_data)
+    trace_data.extend(tracer.trace_data)
+
+trace_view = pd.DataFrame(trace_data).set_index('tick')
+print(trace_view)
