@@ -194,6 +194,7 @@ class GateBucket(Bucket):
         self.tick_data['want_to_move'] = size
         if size == math.inf:
             return frozenset(self.source)
+        self.tick_data['wait'] = size > len(self)
         return frozenset(itertools.islice(self.source, size))
 
 
@@ -285,6 +286,7 @@ class RateBucket(Bucket):
             usable.append(i)
 
         self.tick_data['want_to_move'] = len(usable)
+        self.tick_data['wait'] = len(usable) > len(self)
         result = frozenset(itertools.islice(self.source, len(usable)))
 
         # Only update the slot if it's used. Then ensure that the slot list is
@@ -329,44 +331,51 @@ class ThresholdBucket(Bucket):
         return math.inf
 
 
-class GlobalCapacityBucket(Bucket):
+class CapacityBucket(GateBucket):
     """
-    A bucket which moves all its IOs to a max of system slack
-    """
-    @overrideable
-    def system_slack(self):
-        raise NotImplementedError()
-
-    def to_move(self):
-        return frozenset(itertools.islice(self.source, self.system_slack()))
-
-    def next_action(self):
-        if len(self) > 0 and self.system_slack() > 0:
-            return self.tick + 1
-        return math.inf
-
-
-
-class CapacityBucket(Bucket):
-    """
-    A bucket which moves as many IOs as possible without exceeding its target's
-    capacity
+    A bucket which moves as many IOs as possible, given slack it is interested
+    in
     """
     @overrideable
-    def capacity(self):
-        # This expresses the capacity of the target bucket into which IOs are
-        # moved by this bucket.
+    def slack(self):
         raise NotImplementedError()
 
-    def to_move(self):
-        size = max(self.capacity() - len(self.target), 0)
-        return frozenset(itertools.islice(self.source, size))
+    def wanted_move_size(self):
+        return min(len(self), self.slack())
 
     def next_action(self):
         if not self.source:
             return math.inf
 
-        if len(self.target) < self.capacity():
+        if self.slack() > 0:
             return self.tick + 1
 
         return math.inf
+
+class TargetCapacityBucket(CapacityBucket):
+    """
+    A bucket which moves as many IOs as possible without exceeding its target's
+    capacity
+    """
+    @overrideable
+    def target_capacity(self):
+        # This expresses the capacity of the target bucket into which IOs are
+        # moved by this bucket.
+        raise NotImplementedError()
+
+    def slack(self):
+        # Target num_ios should not exceed target capacity
+        return max(self.target_capacity() - len(self.target), 0)
+
+
+class GlobalCapacityBucket(CapacityBucket):
+    """
+    A bucket which moves all its IOs to a max of system slack
+    """
+    def slack(self):
+        # This is in_progress from the perspective of this bucket
+        # That is, all the IOs that it has seen so far minus the number of IOs
+        # the client has consumed
+        in_progress = self.target.counter - len(self.pipeline['consumed'])
+        # In_progress shouldn't exceed cap_in_progress
+        return max(self.pipeline.cap_in_progress - in_progress, 0)

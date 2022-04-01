@@ -1,6 +1,6 @@
 from bucket import (
     Pipeline, GateBucket, DialBucket, StopBucket, RateBucket,
-    CapacityBucket, ThresholdBucket, Bucket, GlobalCapacityBucket)
+    TargetCapacityBucket, ThresholdBucket, Bucket, GlobalCapacityBucket)
 from units import Rate
 from override import overrideable
 import math
@@ -45,12 +45,9 @@ class AlgorithmBucket(GateBucket):
         super().run()
 
 
-# @TestPipeline.bucket('awaiting_buffer')
-# class RingMaster(GlobalCapacityBucket):
-#     def system_slack(self):
-#         in_progress = self.target.counter - len(self.pipeline['consumed'])
-#         return max(self.pipeline.cap_in_progress - in_progress, 0)
 
+# RingMaster
+# TestPipeline.bucket('awaiting_buffer')(GlobalCapacityBucket)
 
 # @TestPipeline.bucket('w_claimed_buffer')
 # class InvokeBucket(ThresholdBucket):
@@ -63,10 +60,8 @@ class AlgorithmBucket(GateBucket):
 
 
 @TestPipeline.bucket('submitted')
-class InflightRateBucket(CapacityBucket):
-    def to_move(self):
-        self.tick_data['capacity'] = self.capacity()
-        return super().to_move()
+class InflightRateBucket(TargetCapacityBucket):
+    pass
 
 
 @TestPipeline.bucket('inflight')

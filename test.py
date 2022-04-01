@@ -111,8 +111,11 @@ data = data.reindex(data.index.union(data.index[1:] - 1), method='ffill')
 
 ### Plot
 
+# IO data
 view = pd.DataFrame(index=data.index)
 rename = {
+    'sync': 'baseline_sync_to_move',
+    'fetch': 'baseline_all_to_move',
     'prefetch': 'remaining_to_move',
     'claim': 'awaiting_buffer_to_move',
     'invoke_kernel': 'w_claimed_buffer_to_move',
@@ -127,10 +130,42 @@ rename = {k: data[v] for k, v in rename.items() if v in data}
 view = view.assign(**rename)
 
 print(view)
-view.plot()
-plt.show()
+
+# Wait data
+wait_view = pd.DataFrame(index=data.index)
+for column in data:
+    if not column.endswith('_want_to_move'):
+        continue
+    bucket_name = column.removesuffix('_want_to_move')
+    wait_view[f'{bucket_name}_wait'] = data.apply(
+        lambda record: record[f'{bucket_name}_want_to_move'] > record[f'{bucket_name}_to_move'],
+        axis='columns')
+
+wait_rename = {
+    'wait_dispatch': 'submitted_wait',
+    'wait_consume': 'completed_wait',
+}
+
+wait_rename = {k: wait_view[v] for k, v in wait_rename.items() if v in wait_view}
+wait_view = wait_view.assign(**wait_rename)
+dropped_columns = [column for column in wait_view if column not in wait_rename.keys()]
+wait_view = wait_view.drop(columns=dropped_columns)
+print(wait_view)
+
+# Trace data
+trace_data = []
 for tracer in workload.tracers:
     trace_data.extend(tracer.trace_data)
 
 trace_view = pd.DataFrame(trace_data).set_index('tick')
 print(trace_view)
+
+# Do plot
+figure, axes = plt.subplots(2)
+view.plot(ax=axes[0])
+axes[1].get_yaxis().set_visible(False)
+wait_view.astype(int).plot.area(ax=axes[1], stacked=False)
+plt.show()
+
+# title = sys.argv[1]
+# plt.savefig(f'images/{title}.png')

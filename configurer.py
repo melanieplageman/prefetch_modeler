@@ -48,13 +48,13 @@ class Storage(Configuration):
 
         pipeline.override('w_claimed_buffer.threshold', threshold)
 
-        def calculate_capacity(bucket, original):
+        def calculate_target_capacity(bucket, original):
             capacity = self.completion_latency_func(bucket, original) * self.max_iops
             capacity = int(capacity)
             if capacity < 1:
                 raise ValueError("Capacity can't be less than 1")
             return capacity
-        pipeline.override('submitted.capacity', calculate_capacity)
+        pipeline.override('submitted.target_capacity', calculate_target_capacity)
 
 
 @dataclass
