@@ -4,6 +4,8 @@ from fractions import Fraction
 
 from model import TestPipeline
 from units import Duration, BaseRate
+from bucket import IO
+from trace import Tracer
 import json
 
 
@@ -60,12 +62,24 @@ class Workload(Configuration):
     consumption_rate_func : Callable
     volume : int
     duration : Duration
+    trace_ios : list
 
     def __post_init__(self):
+        self._ios = None
         self.duration = self.duration.total if self.duration else None
 
     def configure_pipeline(self, pipeline):
         pipeline.override('completed.rate', self.consumption_rate_func)
+
+    @property
+    def ios(self):
+        if self._ios is None:
+            self._ios = [Tracer(i) if i in self.trace_ios else IO() for i in range(self.volume)]
+        return self._ios
+
+    @property
+    def tracers(self):
+        return (self.ios[i] for i in self.trace_ios)
 
 
 @dataclass

@@ -85,6 +85,7 @@ workload = Workload(
     consumption_rate_func=test_consumption_rate,
     volume=200,
     duration=Duration(seconds=10),
+    trace_ios = [1, 5, 100]
 )
 
 prefetcher = Prefetcher(
@@ -128,3 +129,5 @@ view = view.assign(**rename)
 print(view)
 view.plot()
 plt.show()
+for tracer in workload.tracers:
+    print(tracer.trace_data)

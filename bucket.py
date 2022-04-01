@@ -9,7 +9,12 @@ import warnings
 LOG_BUCKETS = False
 DEBUG = False
 
-class IO: pass
+class IO:
+    def on_add(self, bucket):
+        pass
+
+    def on_discard(self, bucket):
+        pass
 
 
 class Pipeline:
@@ -47,8 +52,8 @@ class Pipeline:
         return data
 
     def run(self, workload):
-        for i in range(workload.volume):
-            self.buckets[0].add(IO())
+        for io in workload.ios:
+            self.buckets[0].add(io)
 
         next_tick = 0
         last_tick = 0
@@ -127,9 +132,11 @@ class Bucket(Overrideable, collections.abc.MutableSet):
 
     def add(self, io):
         self.counter += 1
+        io.on_add(self)
         self.source.add(io)
 
     def discard(self, io):
+        io.on_discard(self)
         self.source.discard(io)
 
     @property
