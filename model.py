@@ -62,18 +62,19 @@ class AlgorithmBucket(GateBucket):
         super().run()
 
 
-
-# RingMaster
-# TestPipeline.bucket('awaiting_buffer')(GlobalCapacityBucket)
-
-# @TestPipeline.bucket('w_claimed_buffer')
-# class InvokeBucket(ThresholdBucket):
-#     pass
+@TestPipeline.bucket('awaiting_buffer')
+class RingMaster(GlobalCapacityBucket):
+    pass
 
 
-# @TestPipeline.bucket('kernel_batch')
-# class SubmitBucket(DialBucket):
-#     pass
+@TestPipeline.bucket('w_claimed_buffer')
+class InvokeBucket(ThresholdBucket):
+    pass
+
+
+@TestPipeline.bucket('kernel_batch')
+class SubmitBucket(DialBucket):
+    pass
 
 
 @TestPipeline.bucket('submitted')

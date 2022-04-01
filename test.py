@@ -3,6 +3,7 @@ from units import Duration, Rate
 import matplotlib.pyplot as plt
 import pandas as pd
 from storage import fast_local, slow_cloud
+import sys
 
 def handle_early_stage1(bucket):
     consumed = len(self.pipeline['consumed'])
@@ -158,6 +159,18 @@ for tracer in workload.tracers:
     trace_data.extend(tracer.trace_data)
 
 trace_view = pd.DataFrame(trace_data).set_index('tick')
+# Note that we logged when the IO was removed, so rename it so that it reflects
+# what state the IO was moving into
+trace_rename = {
+    'submitted_t' : 'baseline_all',
+    'dispatched_t' : 'submitted',
+    'completed_t' : 'inflight',
+    'consumed_t' : 'completed',
+}
+
+for k, v in trace_rename.items():
+    trace_view['bucket'] = trace_view['bucket'].replace(to_replace=v, value=k)
+
 print(trace_view)
 
 # Do plot
