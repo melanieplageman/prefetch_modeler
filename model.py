@@ -21,6 +21,23 @@ class TestPipeline(Pipeline):
 #     def wanted_move_size(self):
 #         return 10
 
+
+@TestPipeline.bucket('baseline_all')
+class BaselineAllBucket(GateBucket):
+    def wanted_move_size(self):
+        return len(self)
+
+
+# @TestPipeline.bucket('baseline_sync')
+# class BaselineSyncBucket(GateBucket):
+#     def wanted_move_size(self):
+#         if self.tick == 0:
+#             return 0
+#         if self.pipeline['completed'].next_action() == math.inf:
+#             return 0
+#         return 1
+
+
 @TestPipeline.bucket('remaining')
 class AlgorithmBucket(GateBucket):
     """
