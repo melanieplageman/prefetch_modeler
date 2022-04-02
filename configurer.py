@@ -33,6 +33,7 @@ class Configuration:
 
 @dataclass
 class Storage(Configuration):
+    name : str
     completion_latency_func : Callable
     kernel_invoke_batch_size: int
     submission_overhead_func: Callable
@@ -59,6 +60,7 @@ class Storage(Configuration):
 
 @dataclass
 class Workload(Configuration):
+    id: int
     consumption_rate_func : Callable
     volume : int
     duration : Duration

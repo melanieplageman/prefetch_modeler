@@ -2,56 +2,10 @@ from configurer import Workload, Prefetcher, PipelineConfiguration
 from units import Duration, Rate
 import matplotlib.pyplot as plt
 import pandas as pd
-from storage import fast_local, slow_cloud
+from storage import fast_local1, slow_cloud1
 import sys
-
-def handle_early_stage1(bucket):
-    consumed = len(self.pipeline['consumed'])
-    submitted = len(self.pipeline['submitted'])
-    inflight = len(self.pipeline['inflight'])
-    completed = len(self.pipeline['completed'])
-    in_progress = self.target.counter - consumed
-
-    if submitted == 0:
-        return
-
-    if consumed == 0:
-        return
-
-def bounded_bump(value, ratio, caps):
-    new_val = max(1, int(value * ratio))
-    for cap in caps:
-        new_val = min(new_val, cap)
-    return new_val
-
-# TODO: how to make it so that I can iterate through different early stage
-# handlers and plot each one
-# and then iterate through "steps" in the algorithm and feature them in the
-# plot too
-def adjust1(self, original):
-    consumed = len(self.pipeline['consumed'])
-    submitted = len(self.pipeline['submitted'])
-    inflight = len(self.pipeline['inflight'])
-    completed = len(self.pipeline['completed'])
-    in_progress = self.target.counter - consumed
-
-    if submitted == 0:
-        return
-
-    if consumed == 0:
-        return
-
-    # handle_early_stage_funcs[0]()
-    ctd = self.pipeline.completion_target_distance
-    # if submitted > 1.2 * inflight:
-    #     self.pipeline.completion_target_distance = bounded_bump(ctd, 0.8, caps)
-
-    caps = [self.pipeline.cap_in_progress]
-    if completed < 0.9 * ctd:
-        self.pipeline.completion_target_distance = bounded_bump(ctd, 1.2, caps)
-
-    if in_progress < 0.5 * ctd:
-        self.pipeline.completion_target_distance = bounded_bump(in_progress, 1.2, caps)
+from adjusters import *
+from plot import io_title
 
 def prefetch_num_ios(self, original):
     consumed = len(self.pipeline['consumed'])
@@ -74,32 +28,32 @@ def prefetch_num_ios(self, original):
 
     # to_submit = min(len(self), to_submit)
 
-
     print(f'ctd: {ctd}. min_dispatch: {self.min_dispatch()}. cap_in_progress: {self.pipeline.cap_in_progress}. in_progress: {in_progress}. to_submit is {to_submit}')
     return to_submit
 
 
+prefetcher = Prefetcher(
+    prefetch_num_ios_func = prefetch_num_ios,
+    adjust_func = adjust1,
+    min_dispatch=2,
+    initial_completion_target_distance=10,
+    cap_in_progress=100,
+)
+
 def test_consumption_rate(self, original):
     return Rate(per_second=5000).value
 
-workload = Workload(
+workload1 = Workload(
+    id=1,
     consumption_rate_func=test_consumption_rate,
     volume=200,
     duration=Duration(seconds=10),
     trace_ios = [1, 5, 100]
 )
 
-prefetcher = Prefetcher(
-    prefetch_num_ios_func = prefetch_num_ios,
-    adjust_func = adjust1,
-    min_dispatch=1,
-    initial_completion_target_distance=10,
-    cap_in_progress=100,
-)
-
 pipeline_config = PipelineConfiguration(
-    storage=fast_local,
-    workload=workload,
+    storage=fast_local1,
+    workload=workload1,
     prefetcher=prefetcher,
 )
 
@@ -154,31 +108,32 @@ wait_view = wait_view.drop(columns=dropped_columns)
 print(wait_view)
 
 # Trace data
-trace_data = []
-for tracer in workload.tracers:
-    trace_data.extend(tracer.trace_data)
+tracer_view = pd.concat(tracer.data for tracer in workload1.tracers)
 
-trace_view = pd.DataFrame(trace_data).set_index('tick')
-# Note that we logged when the IO was removed, so rename it so that it reflects
-# what state the IO was moving into
-trace_rename = {
-    'submitted_t' : 'baseline_all',
-    'dispatched_t' : 'submitted',
-    'completed_t' : 'inflight',
-    'consumed_t' : 'completed',
-}
+bucket_sequence = [bucket.name for bucket in pipeline.buckets]
+tracer_view = pd.concat(tracer.data for tracer in workload1.tracers) \
+    .dropna(axis='index', subset='interval') \
+    .pivot(index='io', columns='bucket', values='interval') \
+    .reindex(bucket_sequence, axis='columns', fill_value=0)
 
-for k, v in trace_rename.items():
-    trace_view['bucket'] = trace_view['bucket'].replace(to_replace=v, value=k)
-
-print(trace_view)
+print(tracer_view)
+tracer_view.plot(kind='barh', stacked=True)
 
 # Do plot
 figure, axes = plt.subplots(2)
-view.plot(ax=axes[0])
+
+axes[0].set_xlim([0, max(view.index)])
+view.plot(ax=axes[0],
+                    title=io_title(pipeline_config.storage, pipeline_config.workload, pipeline_config.prefetcher)
+          )
 axes[1].get_yaxis().set_visible(False)
 wait_view.astype(int).plot.area(ax=axes[1], stacked=False)
-plt.show()
 
-# title = sys.argv[1]
-# plt.savefig(f'images/{title}.png')
+show = sys.argv[1]
+title = sys.argv[2]
+
+if show == 'show':
+    plt.show()
+else:
+    plt.savefig(f'images/{title}.png')
+

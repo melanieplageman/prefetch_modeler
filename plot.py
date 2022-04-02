@@ -93,3 +93,13 @@ def do_plot(data):
                     method='ffill')
     single_run_plot(to_plot)
     return to_row(data)
+
+def io_title(storage, workload, prefetcher):
+    storage_s = f'storage: {storage.name}'
+    workload_s = f'workload: {str(workload.id)}'
+
+    prelim = storage_s + ', ' + workload_s
+    prefetcher_s = f'prefetcher: {str(prefetcher)}'
+
+    title = '\n'.join([prelim, prefetcher_s])
+    return title
