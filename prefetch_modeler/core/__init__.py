@@ -1,9 +1,9 @@
-__all__ = ('IO', 'Pipeline', 'Bucket', 'GateBucket', 'DialBucket',
+__all__ = ('IO', 'Tracer', 'Pipeline', 'Bucket', 'GateBucket', 'DialBucket',
            'StopBucket', 'RateBucket', 'ThresholdBucket', 'CapacityBucket',
-           'TargetCapacityBucket', 'GlobalCapacityBucket', 'Tracer')
+           'TargetCapacityBucket', 'GlobalCapacityBucket')
 
-from prefetch_modeler.core.bucket import IO, Pipeline, Bucket, GateBucket, \
+from prefetch_modeler.core.io import IO, Tracer
+from prefetch_modeler.core.bucket import Pipeline, Bucket, GateBucket, \
            DialBucket, StopBucket, RateBucket, ThresholdBucket, \
            CapacityBucket, TargetCapacityBucket, GlobalCapacityBucket
-from prefetch_modeler.core.trace import Tracer
 from prefetch_modeler.core.units import Duration, Rate

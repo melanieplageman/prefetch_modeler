@@ -1,10 +1,21 @@
-from prefetch_modeler.core.bucket import IO
 import pandas as pd
 
+
+class IO:
+    def on_add(self, bucket):
+        """Called when the IO is added to the ``bucket``."""
+        pass
+
+    def on_discard(self, bucket):
+        """Called when the IO is discarded from the ``bucket``."""
+        pass
+
+
 class Tracer(IO):
+    """An `IO` that will record the tick of each transition to a bucket."""
+
     def __init__(self, id):
         self.id = id
-        self.trace_data = []
         self._data = []
 
     @property
