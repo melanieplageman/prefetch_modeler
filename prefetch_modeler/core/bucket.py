@@ -1,7 +1,6 @@
 import collections.abc
 import pandas as pd
 import math
-from prefetch_modeler.core.override import Overrideable, overrideable
 import warnings
 
 
@@ -81,19 +80,8 @@ class Pipeline:
 
         return self.data
 
-    def override(self, name, function):
-        bucket_name, function_name = name.split('.')
 
-        for bucket in self.buckets:
-            if bucket.name == bucket_name:
-                break
-        else:
-            warnings.warn(f'Cannot override function {function_name!r}() for bucket {bucket_name!r}. No such bucket.')
-
-        bucket.override[function_name] = function
-
-
-class Bucket(Overrideable, collections.abc.MutableSet):
+class Bucket(collections.abc.MutableSet):
     def __init__(self, name, pipeline):
         self.name = name
         self.pipeline = pipeline
@@ -151,15 +139,6 @@ class Bucket(Overrideable, collections.abc.MutableSet):
     def next_action(self):
         return math.inf
 
-    @overrideable
-    def adjust_before(self):
-        pass
-
-    @overrideable
-    def adjust_after(self):
-        pass
-
-    @overrideable
     def run(self):
         self.adjust_before()
 

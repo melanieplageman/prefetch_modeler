@@ -1,7 +1,6 @@
 import itertools
 import math
 from prefetch_modeler.core.bucket import Bucket
-from prefetch_modeler.core.override import overrideable
 
 
 class GateBucket(Bucket):
@@ -32,7 +31,6 @@ class DialBucket(Bucket):
         del io.move_at
         super().discard(io)
 
-    @overrideable
     def latency(self):
         """The amount of time that an IO should be retained in this bucket."""
         raise NotImplementedError()
@@ -75,7 +73,6 @@ class RateBucket(Bucket):
         self.interval = None
         super().__init__(*args, **kwargs)
 
-    @overrideable
     def rate(self):
         """The rate that the bucket should operate on."""
         raise NotImplementedError()
@@ -138,7 +135,6 @@ class ThresholdBucket(Bucket):
     """
     A bucket which moves all IOs once a threshold is met.
     """
-    @overrideable
     def threshold(self):
         raise NotImplementedError()
 
@@ -158,7 +154,6 @@ class CapacityBucket(GateBucket):
     A bucket which moves as many IOs as possible, given slack it is interested
     in
     """
-    @overrideable
     def slack(self):
         raise NotImplementedError()
 
@@ -180,7 +175,6 @@ class TargetCapacityBucket(CapacityBucket):
     A bucket which moves as many IOs as possible without exceeding its target's
     capacity
     """
-    @overrideable
     def target_capacity(self):
         # This expresses the capacity of the target bucket into which IOs are
         # moved by this bucket.
