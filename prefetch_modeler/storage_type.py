@@ -1,4 +1,8 @@
-def storage_type(completion_latency_func, kernel_invoke_batch_size,
+from prefetch_modeler.core import DialBucket, TargetCapacityBucket, \
+    ThresholdBucket, Rate, Duration
+
+
+def storage_type(name, completion_latency_func, kernel_invoke_batch_size,
                  submission_overhead_func, max_iops):
 
     class w_claimed_buffer(ThresholdBucket):

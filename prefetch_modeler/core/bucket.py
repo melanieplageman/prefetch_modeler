@@ -43,8 +43,8 @@ class Pipeline:
             data = data.join(bucket.data.add_prefix(f"{bucket.name}_"))
         return data
 
-    def run(self, workload):
-        for io in workload.ios:
+    def run(self, ios, duration=None):
+        for io in ios:
             self.buckets[0].add(io)
 
         next_tick = 0
@@ -59,7 +59,7 @@ class Pipeline:
             for bucket in self.buckets:
                 bucket.run()
 
-            if len(self.buckets[-1]) == workload.volume:
+            if len(self.buckets[-1]) == len(ios):
                 break
 
             actionable = {
@@ -76,7 +76,7 @@ class Pipeline:
                 raise ValueError(f'Next action tick request {next_tick} (from {bucket_name}) is older than last action tick {last_tick}.')
             last_tick = next_tick
 
-            if workload.duration and next_tick > workload.duration:
+            if duration is not None and next_tick > duration.total:
                 break
 
         return self.data

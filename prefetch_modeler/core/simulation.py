@@ -1,5 +1,6 @@
-from prefetch_modeler.core import IO, Tracer, Pipeline
+from dataclasses import dataclass
 import pandas as pd
+from prefetch_modeler.core import IO, Tracer, Pipeline
 
 
 class Simulation:
@@ -10,7 +11,10 @@ class Simulation:
         traced = traced or frozenset()
         ios = [Tracer(i) if i in traced else IO() for i in range(volume)]
 
-        pipeline = Pipeline(*[bucket_type(bucket_type.__name__) for bucket_type in self.schema])
+        pipeline = Pipeline(*[bucket_type(bucket_type.__name__, None) for bucket_type in self.schema])
+        # TODO: hack
+        for bucket in pipeline.buckets:
+            bucket.pipeline = pipeline
 
         bucket_data = pipeline.run(ios, duration=duration)
 
