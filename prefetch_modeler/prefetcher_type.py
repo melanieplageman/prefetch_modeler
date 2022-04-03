@@ -2,6 +2,8 @@ from prefetch_modeler.core import GateBucket
 
 
 class Prefetcher(GateBucket):
+    name = 'remaining'
+
     """
     A bucket that will move the number of IOs specified by an algorithm, with
     the option of modifying the algorithm on each run.

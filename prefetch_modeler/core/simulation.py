@@ -11,7 +11,7 @@ class Simulation:
         traced = traced or frozenset()
         ios = [Tracer(i) if i in traced else IO() for i in range(volume)]
 
-        pipeline = Pipeline(*[bucket_type(bucket_type.__name__, None) for bucket_type in self.schema])
+        pipeline = Pipeline(*[bucket_type(getattr(bucket_type, 'name', bucket_type.__name__), None) for bucket_type in self.schema])
         # TODO: hack
         for bucket in pipeline.buckets:
             bucket.pipeline = pipeline
