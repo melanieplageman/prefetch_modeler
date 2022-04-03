@@ -94,7 +94,11 @@ def do_plot(data):
     single_run_plot(to_plot)
     return to_row(data)
 
-def io_title(storage, workload, prefetcher):
+def io_title(pipeline_config):
+    storage = pipeline_config.storage
+    workload = pipeline_config.workload
+    prefetcher = pipeline_config.prefetcher
+
     storage_s = f'storage: {storage.name}'
     workload_s = f'workload: {str(workload.id)}'
 
@@ -103,3 +107,55 @@ def io_title(storage, workload, prefetcher):
 
     title = '\n'.join([prelim, prefetcher_s])
     return title
+
+def plot_io_data(data):
+    view = pd.DataFrame(index=data.index)
+    rename = {
+        # 'do_sync_fetch': 'baseline_sync_to_move',
+        # 'do_fetch_all': 'baseline_all_to_move',
+        # 'do_prefetch': 'remaining_to_move',
+        # 'do_claim': 'awaiting_buffer_to_move',
+        # 'num_ios_w_buffer': 'w_claimed_buffer_num_ios',
+        # 'do_invoke_kernel': 'w_claimed_buffer_to_move',
+        # 'do_submit': 'kernel_batch_to_move',
+        # 'do_dispatch': 'submitted_to_move',
+        # 'inflight': 'inflight_num_ios',
+        # 'do_complete': 'inflight_to_move',
+        'completed_not_consumed': 'completed_num_ios',
+        'do_consume': 'completed_to_move',
+        'completion_target_distance': 'remaining_completion_target_distance',
+        'min_dispatch': 'remaining_min_dispatch',
+    }
+    rename = {k: data[v] for k, v in rename.items() if v in data}
+    view = view.assign(**rename)
+    return view
+
+def plot_wait_data(data):
+    wait_view = pd.DataFrame(index=data.index)
+    for column in data:
+        if not column.endswith('_want_to_move'):
+            continue
+        bucket_name = column.removesuffix('_want_to_move')
+        wait_view[f'{bucket_name}_wait'] = data.apply(
+            lambda record: record[f'{bucket_name}_want_to_move'] > record[f'{bucket_name}_to_move'],
+            axis='columns')
+
+    wait_rename = {
+        'wait_dispatch': 'submitted_wait',
+        'wait_consume': 'completed_wait',
+    }
+
+    wait_rename = {k: wait_view[v] for k, v in wait_rename.items() if v in wait_view}
+    wait_view = wait_view.assign(**wait_rename)
+    dropped_columns = [column for column in wait_view if column not in wait_rename.keys()]
+    wait_view = wait_view.drop(columns=dropped_columns)
+    return wait_view
+
+def plot_trace_data(tracers, buckets):
+    bucket_sequence = [bucket.name for bucket in buckets]
+    tracer_view = pd.concat(tracer.data for tracer in tracers) \
+        .dropna(axis='index', subset='interval') \
+        .pivot(index='io', columns='bucket', values='interval') \
+        .reindex(bucket_sequence, axis='columns', fill_value=0)
+
+    return tracer_view

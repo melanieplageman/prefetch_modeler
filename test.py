@@ -3,137 +3,114 @@ from units import Duration, Rate
 import matplotlib.pyplot as plt
 import pandas as pd
 from storage import fast_local1, slow_cloud1
+from workloads import workload_list
 import sys
-from adjusters import *
-from plot import io_title
+import os
+from adjusters import prefetcher_list
+from plot import io_title, plot_io_data, plot_wait_data, plot_trace_data
 
-def prefetch_num_ios(self, original):
-    consumed = len(self.pipeline['consumed'])
-    submitted = len(self.pipeline['submitted'])
-    inflight = len(self.pipeline['inflight'])
-    in_progress = self.target.counter - consumed
+def get_limits(results):
+    xlim, xwaitlim, xtracelim = 0, 0, 0
+    for result in results:
+        max_x = max(result['view'].index)
+        max_wait_x = max(result['wait_view'].index)
+        # max_trace_x = max(result['tracer_view'].index)
+        max_trace_x = 0
 
-    self.tick_data['completion_target_distance'] = self.pipeline.completion_target_distance
-    if in_progress + self.min_dispatch() >= self.pipeline.cap_in_progress:
-        return 0
+        xlim = max_x if max_x > xlim else xlim
+        xwaitlim = max_wait_x if max_wait_x > xwaitlim else xwaitlim
+        xtracelim = max_trace_x if max_trace_x > xtracelim else xtracelim
 
-    if in_progress + self.min_dispatch() >= self.pipeline.completion_target_distance:
-        return 0
+    return {'xlim': xlim, 'xwaitlim': xwaitlim, 'xtracelim': xtracelim}
 
-    ctd = self.pipeline.completion_target_distance
+all_results = []
+for storage in [slow_cloud1, fast_local1]:
+    for workload in workload_list:
+        wl_storage_results = []
+        for prefetcher in prefetcher_list:
+            workload.reset()
+            pipeline_config = PipelineConfiguration(
+                storage=storage,
+                workload=workload,
+                prefetcher=prefetcher,
+            )
 
-    to_submit = min(
-        self.pipeline.completion_target_distance - in_progress,
-        self.pipeline.cap_in_progress - in_progress)
+            pipeline = pipeline_config.generate_pipeline()
 
-    # to_submit = min(len(self), to_submit)
+            ### Run
 
-    print(f'ctd: {ctd}. min_dispatch: {self.min_dispatch()}. cap_in_progress: {self.pipeline.cap_in_progress}. in_progress: {in_progress}. to_submit is {to_submit}')
-    return to_submit
+            data = pipeline.run(workload)
+            data = data.reindex(data.index.union(data.index[1:] - 1), method='ffill')
+
+            ### Plot
+
+            # IO data
+            view = plot_io_data(data)
+            # print(view)
+
+            # Wait data
+            wait_view = plot_wait_data(data)
+            # print(wait_view)
+
+            # Trace data
+            tracer_view = plot_trace_data(workload.tracers, pipeline.buckets)
+
+            wl_storage_results.append({
+                'pipeline_config': pipeline_config,
+                'view': view,
+                'wait_view': wait_view,
+                'tracer_view': tracer_view,
+            })
+        limits = get_limits(wl_storage_results)
+        all_results.append({
+            'wl_storage_results': wl_storage_results,
+            'limits': limits
+        })
 
 
-prefetcher = Prefetcher(
-    prefetch_num_ios_func = prefetch_num_ios,
-    adjust_func = adjust1,
-    min_dispatch=2,
-    initial_completion_target_distance=10,
-    cap_in_progress=100,
-)
+def plot_views(pipeline_config, limits, view, wait_view):#, tracer_view):
+    figure, axes = plt.subplots(2)
+    axes[0].set_xlim([0, limits['xlim'] ])
+    view.plot(ax=axes[0],
+                        title=io_title(pipeline_config)
+            )
+    axes[1].get_yaxis().set_visible(False)
+    axes[1].set_xlim([0, limits['xwaitlim'] ])
+    wait_view.astype(int).plot.area(ax=axes[1], stacked=False)
 
-def test_consumption_rate(self, original):
-    return Rate(per_second=5000).value
+    if not tracer_view.empty:
+        tracer_view.plot(kind='barh', stacked=True)
 
-workload1 = Workload(
-    id=1,
-    consumption_rate_func=test_consumption_rate,
-    volume=200,
-    duration=Duration(seconds=10),
-    trace_ios = [1, 5, 100]
-)
+    show = sys.argv[1]
 
-pipeline_config = PipelineConfiguration(
-    storage=fast_local1,
-    workload=workload1,
-    prefetcher=prefetcher,
-)
+    if show == 'show':
+        plt.show()
+    else:
+        storage_name = pipeline_config.storage.name
+        wl_name = f'wl{str(pipeline_config.workload.id)}'
+        prefetcher_name = f'pf{str(pipeline_config.prefetcher.id)}'
+        directory = f'images/{storage_name}/{wl_name}/'
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        else:
+            for filename in os.listdir(directory):
+                file_path = os.path.join(directory, filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.unlink(file_path)
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                except Exception as e:
+                    print('Failed to delete %s. Reason: %s' % (file_path, e))
 
-pipeline = pipeline_config.generate_pipeline()
+        plt.savefig(f'{directory}/{prefetcher_name}.png')
 
-### Run
 
-data = pipeline.run(workload)
-data = data.reindex(data.index.union(data.index[1:] - 1), method='ffill')
 
-### Plot
-
-# IO data
-view = pd.DataFrame(index=data.index)
-rename = {
-    'sync': 'baseline_sync_to_move',
-    'fetch': 'baseline_all_to_move',
-    'prefetch': 'remaining_to_move',
-    'claim': 'awaiting_buffer_to_move',
-    'invoke_kernel': 'w_claimed_buffer_to_move',
-    'num_ios_w_buffer': 'w_claimed_buffer_num_ios',
-    'submit': 'kernel_batch_to_move',
-    'dispatch': 'submitted_to_move',
-    'complete': 'inflight_to_move',
-    'consume': 'completed_to_move',
-    'completion_target_distance': 'remaining_completion_target_distance',
-}
-rename = {k: data[v] for k, v in rename.items() if v in data}
-view = view.assign(**rename)
-
-print(view)
-
-# Wait data
-wait_view = pd.DataFrame(index=data.index)
-for column in data:
-    if not column.endswith('_want_to_move'):
-        continue
-    bucket_name = column.removesuffix('_want_to_move')
-    wait_view[f'{bucket_name}_wait'] = data.apply(
-        lambda record: record[f'{bucket_name}_want_to_move'] > record[f'{bucket_name}_to_move'],
-        axis='columns')
-
-wait_rename = {
-    'wait_dispatch': 'submitted_wait',
-    'wait_consume': 'completed_wait',
-}
-
-wait_rename = {k: wait_view[v] for k, v in wait_rename.items() if v in wait_view}
-wait_view = wait_view.assign(**wait_rename)
-dropped_columns = [column for column in wait_view if column not in wait_rename.keys()]
-wait_view = wait_view.drop(columns=dropped_columns)
-print(wait_view)
-
-# Trace data
-tracer_view = pd.concat(tracer.data for tracer in workload1.tracers)
-
-bucket_sequence = [bucket.name for bucket in pipeline.buckets]
-tracer_view = pd.concat(tracer.data for tracer in workload1.tracers) \
-    .dropna(axis='index', subset='interval') \
-    .pivot(index='io', columns='bucket', values='interval') \
-    .reindex(bucket_sequence, axis='columns', fill_value=0)
-
-print(tracer_view)
-tracer_view.plot(kind='barh', stacked=True)
-
-# Do plot
-figure, axes = plt.subplots(2)
-
-axes[0].set_xlim([0, max(view.index)])
-view.plot(ax=axes[0],
-                    title=io_title(pipeline_config.storage, pipeline_config.workload, pipeline_config.prefetcher)
-          )
-axes[1].get_yaxis().set_visible(False)
-wait_view.astype(int).plot.area(ax=axes[1], stacked=False)
-
-show = sys.argv[1]
-title = sys.argv[2]
-
-if show == 'show':
-    plt.show()
-else:
-    plt.savefig(f'images/{title}.png')
-
+for wl_storage_results in all_results:
+    for result in wl_storage_results['wl_storage_results']:
+        plot_views(result['pipeline_config'],
+                wl_storage_results['limits'],
+                result['view'],
+                result['wait_view'],
+                )

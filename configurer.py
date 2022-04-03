@@ -83,9 +83,13 @@ class Workload(Configuration):
     def tracers(self):
         return (self.ios[i] for i in self.trace_ios)
 
+    def reset(self):
+        self._ios = None
+
 
 @dataclass
 class Prefetcher(Configuration):
+    id: int
     prefetch_num_ios_func : Callable
     adjust_func : Callable
     min_dispatch : int
@@ -98,6 +102,7 @@ class Prefetcher(Configuration):
 
         pipeline.cap_in_progress = self.cap_in_progress
         pipeline.completion_target_distance = self.initial_completion_target_distance
+        pipeline.min_dispatch = self.min_dispatch
 
         pipeline.override('remaining.wanted_move_size', self.prefetch_num_ios_func)
 

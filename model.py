@@ -22,10 +22,10 @@ class TestPipeline(Pipeline):
 #         return 10
 
 
-@TestPipeline.bucket('baseline_all')
-class BaselineAllBucket(GateBucket):
-    def wanted_move_size(self):
-        return len(self)
+# @TestPipeline.bucket('baseline_all')
+# class BaselineAllBucket(GateBucket):
+#     def wanted_move_size(self):
+#         return len(self)
 
 
 # @TestPipeline.bucket('baseline_sync')
@@ -44,9 +44,9 @@ class AlgorithmBucket(GateBucket):
     A bucket that will move the number of IOs specified by an algorithm, with
     the option of modifying the algorithm on each run.
     """
-    @overrideable
-    def min_dispatch(self):
-        raise NotImplementedError()
+    # @overrideable
+    # def min_dispatch(self):
+    #     raise NotImplementedError()
 
     @overrideable
     def adjust(self):
@@ -62,14 +62,14 @@ class AlgorithmBucket(GateBucket):
         super().run()
 
 
-@TestPipeline.bucket('awaiting_buffer')
-class RingMaster(GlobalCapacityBucket):
-    pass
+# @TestPipeline.bucket('awaiting_buffer')
+# class RingMaster(GlobalCapacityBucket):
+#     pass
 
 
-@TestPipeline.bucket('w_claimed_buffer')
-class InvokeBucket(ThresholdBucket):
-    pass
+# @TestPipeline.bucket('w_claimed_buffer')
+# class InvokeBucket(ThresholdBucket):
+#     pass
 
 
 @TestPipeline.bucket('kernel_batch')
