@@ -189,10 +189,13 @@ class GlobalCapacityBucket(CapacityBucket):
     """
     A bucket which moves all its IOs to a max of system slack
     """
+    def max_buffers(self):
+        raise NotImplementedError()
+
     def slack(self):
         # This is in_progress from the perspective of this bucket
         # That is, all the IOs that it has seen so far minus the number of IOs
         # the client has consumed
         in_progress = self.target.counter - len(self.pipeline['consumed'])
-        # In_progress shouldn't exceed cap_in_progress
-        return max(self.pipeline.cap_in_progress - in_progress, 0)
+        # In_progress shouldn't exceed max_buffers
+        return max(self.max_buffers() - in_progress, 0)

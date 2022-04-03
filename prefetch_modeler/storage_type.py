@@ -1,9 +1,17 @@
 from prefetch_modeler.core import DialBucket, TargetCapacityBucket, \
-    ThresholdBucket, Rate, Duration
+    ThresholdBucket, GlobalCapacityBucket, Rate, Duration
 
 
-def storage_type(name, completion_latency_func, kernel_invoke_batch_size,
-                 submission_overhead_func, max_iops):
+def storage_type(name,
+                 max_buffers,
+                 kernel_invoke_batch_size,
+                 submission_overhead_func,
+                 completion_latency_func,
+                 max_iops):
+
+    class awaiting_buffer(GlobalCapacityBucket):
+        def max_buffers(self):
+            return max_buffers
 
     class w_claimed_buffer(ThresholdBucket):
         def threshold(self):
@@ -25,7 +33,7 @@ def storage_type(name, completion_latency_func, kernel_invoke_batch_size,
         def latency(self):
             return completion_latency_func(self)
 
-    return [w_claimed_buffer, kernel_batch, submitted, inflight]
+    return [awaiting_buffer, w_claimed_buffer, kernel_batch, submitted, inflight]
 
 
 def submission_latency(self):
@@ -36,9 +44,10 @@ def local_storage_latency(self):
 
 fast_local1 = storage_type(
     name = 'fast_local1',
-    completion_latency_func = local_storage_latency,
+    max_buffers = 200,
     kernel_invoke_batch_size = 5,
     submission_overhead_func = submission_latency,
+    completion_latency_func = local_storage_latency,
     max_iops=Rate(per_second=20000).value,
 )
 
@@ -47,8 +56,9 @@ def cloud_storage_latency(self):
 
 slow_cloud1 = storage_type(
     name = 'slow_cloud1',
-    completion_latency_func = cloud_storage_latency,
+    max_buffers = 200,
     kernel_invoke_batch_size = 5,
     submission_overhead_func = submission_latency,
+    completion_latency_func = cloud_storage_latency,
     max_iops=Rate(per_second=2000).value,
 )
