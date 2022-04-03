@@ -2,8 +2,7 @@ from prefetch_modeler.core import DialBucket, TargetCapacityBucket, \
     ThresholdBucket, GlobalCapacityBucket, Rate, Duration
 
 
-def storage_type(name,
-                 max_buffers,
+def storage_type(max_buffers,
                  kernel_invoke_batch_size,
                  submission_overhead_func,
                  completion_latency_func,
@@ -43,7 +42,6 @@ def local_storage_latency(self):
     return int(Duration(microseconds=500).total)
 
 fast_local1 = storage_type(
-    name = 'fast_local1',
     max_buffers = 200,
     kernel_invoke_batch_size = 5,
     submission_overhead_func = submission_latency,
@@ -55,7 +53,6 @@ def cloud_storage_latency(self):
     return int(Duration(milliseconds=3).total)
 
 slow_cloud1 = storage_type(
-    name = 'slow_cloud1',
     max_buffers = 200,
     kernel_invoke_batch_size = 5,
     submission_overhead_func = submission_latency,

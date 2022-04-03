@@ -10,8 +10,8 @@ class Prefetcher(GateBucket):
     """
 
     cap_in_progress = 200
-    completion_target_distance = 20
-    min_dispatch = 2
+    completion_target_distance = 7
+    min_dispatch = 1
 
     def __init__(self, *args, **kwargs):
         if self.completion_target_distance > self.cap_in_progress:
@@ -23,23 +23,20 @@ class Prefetcher(GateBucket):
 
     def wanted_move_size(self):
         self.tick_data['completion_target_distance'] = self.completion_target_distance
-        if self.in_progress + self.min_dispatch >= self.cap_in_progress:
-            return 0
-
-        if self.in_progress + self.min_dispatch >= self.completion_target_distance:
-            return 0
-
-        ctd = self.completion_target_distance
-
-        to_submit = min(
-            self.completion_target_distance - self.in_progress,
-            self.cap_in_progress - self.in_progress)
-
-        # to_submit = min(len(self), to_submit)
         self.tick_data['min_dispatch'] = self.min_dispatch
-        self.tick_data['completion_target_distance'] = self.completion_target_distance
 
-        print(f'ctd: {ctd}. min_dispatch: {self.min_dispatch}. cap_in_progress: {self.cap_in_progress}. in_progress: {self.in_progress}. to_submit is {to_submit}')
+        if self.in_progress + self.min_dispatch > self.cap_in_progress:
+            return 0
+
+        if self.in_progress + self.min_dispatch > self.completion_target_distance:
+            return 0
+
+        to_submit = max(self.min_dispatch,
+                        self.completion_target_distance - self.in_progress)
+
+        will_submit = min(len(self), to_submit)
+
+        print(f'ctd: {self.completion_target_distance}. min_dispatch: {self.min_dispatch}. cap_in_progress: {self.cap_in_progress}. in_progress: {self.in_progress}. to_submit is {to_submit}. will_submit: {will_submit}.')
         return to_submit
 
 
@@ -76,26 +73,6 @@ class Prefetcher(GateBucket):
         return new_val
 
 
-# TODO: how to make it so that I can iterate through different early stage
-# handlers and plot each one
-# and then iterate through "steps" in the algorithm and feature them in the
-# plot too
-
-class AdjustedPrefetcher1(Prefetcher):
-    def adjust(self):
-        if self.submitted == 0 or self.consumed == 0:
-            return
-
-        ctd = self.completion_target_distance
-
-        caps = [self.cap_in_progress]
-        if self.completed < 0.9 * ctd:
-            self.completion_target_distance = self.bounded_bump(ctd, 1.2, caps)
-
-        if self.in_progress < 0.5 * ctd:
-            self.completion_target_distance = self.bounded_bump(self.in_progress, 1.2, caps)
-
-
 class AdjustedPrefetcher2(Prefetcher):
     def adjust(self):
         if self.submitted == 0 or self.consumed == 0:
@@ -106,49 +83,27 @@ class AdjustedPrefetcher2(Prefetcher):
         #     self.completion_target_distance = self.bounded_bump(ctd, 0.8, caps)
 
         caps = [self.cap_in_progress]
-        if self.completed < 0.8 * ctd:
-            self.completion_target_distance = self.bounded_bump(ctd, 1.2, caps)
+        # if self.completed < 0.8 * ctd:
+        #     self.completion_target_distance = self.bounded_bump(ctd, 1.2, caps)
 
-        if self.in_progress < 0.5 * ctd:
-            self.completion_target_distance = self.bounded_bump(self.in_progress, 1.2, caps)
-
-
-class AdjustedPrefetcher3(Prefetcher):
-    def adjust(self):
-        if self.submitted == 0 or self.consumed == 0:
-            return
-
-        ctd = self.completion_target_distance
-        # if submitted > 1.2 * inflight:
-        #     self.completion_target_distance = self.bounded_bump(ctd, 0.8, caps)
-
-        caps = [self.cap_in_progress]
-        if self.completed < 0.3 * ctd:
-            self.completion_target_distance = self.bounded_bump(ctd, 1.2, caps)
-
-        if self.in_progress < 0.5 * ctd:
-            self.completion_target_distance = self.bounded_bump(self.in_progress, 1.2, caps)
+        # if self.in_progress < 0.5 * ctd:
+        #     self.completion_target_distance = self.bounded_bump(self.in_progress, 1.2, caps)
 
 
-class AdjustedPrefetcher4(Prefetcher):
-    def adjust(self):
-        if self.submitted == 0 or self.consumed == 0:
-            return
+class BaselineSync(Prefetcher):
+    def wanted_move_size(self):
+        if not self.pipeline['completed'].movement_size:
+            return 0
 
-        ctd = self.completion_target_distance
+        if self.pipeline['completed'].movement_size > 0:
+            return 1
+        return 0
 
-        caps = [self.cap_in_progress]
-        if self.completed < 0.90 * ctd:
-            self.completion_target_distance = self.bounded_bump(ctd, 1.2, caps)
-            self.min_dispatch = int(self.min_dispatch * 2)
 
-        if self.completed > 1.5 * ctd:
-            self.completion_target_distance = self.bounded_bump(ctd, 0.8, caps)
-
+class BaselineFetchAll(Prefetcher):
+    def wanted_move_size(self):
+        return len(self)
 
 prefetcher_list = [
-    [AdjustedPrefetcher1],
     [AdjustedPrefetcher2],
-    [AdjustedPrefetcher3],
-    [AdjustedPrefetcher4],
 ]

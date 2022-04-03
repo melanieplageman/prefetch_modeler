@@ -108,7 +108,7 @@ def io_title(pipeline_config):
     title = '\n'.join([prelim, prefetcher_s])
     return title
 
-def plot_io_data(data):
+def io_data(data):
     view = pd.DataFrame(index=data.index)
     rename = {
         # 'do_sync_fetch': 'baseline_sync_to_move',
@@ -119,18 +119,18 @@ def plot_io_data(data):
         # 'do_invoke_kernel': 'w_claimed_buffer_to_move',
         # 'do_submit': 'kernel_batch_to_move',
         # 'do_dispatch': 'submitted_to_move',
-        # 'inflight': 'inflight_num_ios',
+        'inflight': 'inflight_num_ios',
         # 'do_complete': 'inflight_to_move',
         'completed_not_consumed': 'completed_num_ios',
-        'do_consume': 'completed_to_move',
-        'completion_target_distance': 'remaining_completion_target_distance',
+        # 'do_consume': 'completed_to_move',
+        # 'completion_target_distance': 'remaining_completion_target_distance',
         'min_dispatch': 'remaining_min_dispatch',
     }
     rename = {k: data[v] for k, v in rename.items() if v in data}
     view = view.assign(**rename)
     return view
 
-def plot_wait_data(data):
+def wait_data(data):
     wait_view = pd.DataFrame(index=data.index)
     for column in data:
         if not column.endswith('_want_to_move'):
