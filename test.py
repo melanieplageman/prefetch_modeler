@@ -68,7 +68,7 @@ for storage in [slow_cloud1, fast_local1]:
         })
 
 
-def plot_views(pipeline_config, limits, view, wait_view):#, tracer_view):
+def plot_views(pipeline_config, limits, view, wait_view, tracer_view):
     figure, axes = plt.subplots(2)
     axes[0].set_xlim([0, limits['xlim'] ])
     view.plot(ax=axes[0],
@@ -113,4 +113,5 @@ for wl_storage_results in all_results:
                 wl_storage_results['limits'],
                 result['view'],
                 result['wait_view'],
+                result['tracer_view']
                 )
