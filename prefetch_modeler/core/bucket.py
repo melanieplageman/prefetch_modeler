@@ -140,8 +140,6 @@ class Bucket(collections.abc.MutableSet):
         return math.inf
 
     def run(self):
-        self.adjust_before()
-
         to_move = self.to_move()
         self.tick_data['to_move'] = len(to_move)
 
@@ -152,5 +150,3 @@ class Bucket(collections.abc.MutableSet):
             self.target.add(io)
 
         self.tick_data['num_ios'] = len(self)
-
-        self.adjust_after()
