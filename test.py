@@ -8,7 +8,7 @@ from prefetch_modeler.core import Duration, Rate, Simulation
 from prefetch_modeler.storage_type import fast_local1, slow_cloud1
 from prefetch_modeler.workload_type import workload1, workload2
 from prefetch_modeler.prefetcher_type import prefetcher_list
-from prefetch_modeler.plot import io_title, plot_io_data, plot_wait_data, plot_trace_data
+from prefetch_modeler.plot import io_title, plot_io_data, plot_wait_data
 
 
 def get_limits(results):
