@@ -150,12 +150,3 @@ def plot_wait_data(data):
     dropped_columns = [column for column in wait_view if column not in wait_rename.keys()]
     wait_view = wait_view.drop(columns=dropped_columns)
     return wait_view
-
-def plot_trace_data(tracers, buckets):
-    bucket_sequence = [bucket.name for bucket in buckets]
-    tracer_view = pd.concat(tracer.data for tracer in tracers) \
-        .dropna(axis='index', subset='interval') \
-        .pivot(index='io', columns='bucket', values='interval') \
-        .reindex(bucket_sequence, axis='columns', fill_value=0)
-
-    return tracer_view
