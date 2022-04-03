@@ -1,4 +1,4 @@
-from bucket import IO
+from prefetch_modeler.core.bucket import IO
 import pandas as pd
 
 class Tracer(IO):

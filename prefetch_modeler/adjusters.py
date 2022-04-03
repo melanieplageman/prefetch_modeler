@@ -1,4 +1,4 @@
-from configurer import Prefetcher
+from prefetch_modeler.configurer import Prefetcher
 
 def bounded_bump(value, ratio, caps):
     new_val = max(1, int(value * ratio))

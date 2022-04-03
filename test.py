@@ -1,13 +1,13 @@
-from configurer import Workload, Prefetcher, PipelineConfiguration
-from units import Duration, Rate
+from prefetch_modeler.configurer import Workload, Prefetcher, PipelineConfiguration
+from prefetch_modeler.core import Duration, Rate
 import matplotlib.pyplot as plt
 import pandas as pd
-from storage import fast_local1, slow_cloud1
-from workloads import workload_list
+from prefetch_modeler.storage import fast_local1, slow_cloud1
+from prefetch_modeler.workloads import workload_list
 import sys
 import os
-from adjusters import prefetcher_list
-from plot import io_title, plot_io_data, plot_wait_data, plot_trace_data
+from prefetch_modeler.adjusters import prefetcher_list
+from prefetch_modeler.plot import io_title, plot_io_data, plot_wait_data, plot_trace_data
 
 def get_limits(results):
     xlim, xwaitlim, xtracelim = 0, 0, 0

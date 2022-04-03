@@ -2,10 +2,9 @@ from dataclasses import dataclass
 from typing import Callable
 from fractions import Fraction
 
-from model import TestPipeline
-from units import Duration, BaseRate
-from bucket import IO
-from trace import Tracer
+from prefetch_modeler.model import TestPipeline
+from prefetch_modeler.core import IO, Duration, Tracer
+from prefetch_modeler.core.units import BaseRate
 import json
 
 

@@ -1,6 +1,6 @@
-from configurer import PipelineConfiguration, Prefetcher, Storage, Workload
-from units import Rate, Duration, InfiniteRate
-from plot import do_plot, to_row
+from prefetch_modeler.configurer import PipelineConfiguration, Prefetcher, Storage, Workload
+from prefetch_modeler.core.units import Rate, Duration, InfiniteRate
+from prefetch_modeler.plot import do_plot, to_row
 import math
 
 def algo_logger(prefetch_bucket):

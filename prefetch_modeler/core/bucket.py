@@ -2,7 +2,7 @@ import collections.abc
 import itertools
 import pandas as pd
 import math
-from override import Overrideable, overrideable
+from prefetch_modeler.core.override import Overrideable, overrideable
 import warnings
 
 

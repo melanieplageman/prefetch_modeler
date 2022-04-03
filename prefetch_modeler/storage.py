@@ -1,5 +1,5 @@
-from configurer import Storage
-from units import Duration, Rate
+from prefetch_modeler.configurer import Storage
+from prefetch_modeler.core import Duration, Rate
 
 def submission_latency(self, original):
     return int(Duration(microseconds=10).total)

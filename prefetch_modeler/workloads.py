@@ -1,5 +1,5 @@
-from configurer import Workload
-from units import Duration, Rate
+from prefetch_modeler.configurer import Workload
+from prefetch_modeler.core import Duration, Rate
 
 def test_consumption_rate(self, original):
     return Rate(per_second=5000).value

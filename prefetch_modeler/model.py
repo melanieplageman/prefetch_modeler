@@ -1,8 +1,7 @@
-from bucket import (
-    Pipeline, GateBucket, DialBucket, StopBucket, RateBucket,
-    TargetCapacityBucket, ThresholdBucket, Bucket, GlobalCapacityBucket)
-from units import Rate
-from override import overrideable
+from prefetch_modeler.core import Pipeline, GateBucket, DialBucket, \
+    StopBucket, RateBucket, TargetCapacityBucket, ThresholdBucket, Bucket, \
+    GlobalCapacityBucket, Rate
+from prefetch_modeler.core.override import overrideable
 import math
 import itertools
 
