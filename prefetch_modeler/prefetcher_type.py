@@ -1,4 +1,5 @@
-from prefetch_modeler.core import GateBucket, ContinueBucket, GlobalCapacityBucket
+from prefetch_modeler.core import GateBucket, ContinueBucket, \
+GlobalCapacityBucket, RateBucket, Rate
 
 
 class Prefetcher(GateBucket):
@@ -36,7 +37,8 @@ class Prefetcher(GateBucket):
 
         will_submit = min(len(self), to_submit)
 
-        print(f'ctd: {self.completion_target_distance}. min_dispatch: {self.min_dispatch}. target_in_progress: {self.target_in_progress}. in_progress: {self.in_progress}. to_submit is {to_submit}. will_submit: {will_submit}.')
+        print(f'ctd: {self.completion_target_distance}. completed: {self.completed}. target_in_progress: {self.target_in_progress}. in_progress: {self.in_progress}. consumed: {self.consumed}. min_dispatch: {self.min_dispatch}. to_submit is {to_submit}. will_submit: {will_submit}.')
+
         return to_submit
 
 
@@ -73,23 +75,6 @@ class Prefetcher(GateBucket):
         return new_val
 
 
-class AdjustedPrefetcher2(Prefetcher):
-    def adjust(self):
-        if self.submitted == 0 or self.consumed == 0:
-            return
-
-        ctd = self.completion_target_distance
-        # if submitted > 1.2 * inflight:
-        #     self.completion_target_distance = self.bounded_bump(ctd, 0.8, caps)
-
-        caps = [self.target_in_progress]
-        # if self.completed < 0.8 * ctd:
-        #     self.completion_target_distance = self.bounded_bump(ctd, 1.2, caps)
-
-        # if self.in_progress < 0.5 * ctd:
-        #     self.completion_target_distance = self.bounded_bump(self.in_progress, 1.2, caps)
-
-
 class BaselineSync(GlobalCapacityBucket):
     name = 'remaining'
 
@@ -99,6 +84,60 @@ class BaselineSync(GlobalCapacityBucket):
 
 class BaselineFetchAll(ContinueBucket):
     name = 'remaining'
+
+class CoolPrefetcher(RateBucket):
+    name = 'remaining'
+
+    def rate(self):
+        return self.period_rate
+
+    @property
+    def completed(self):
+        return len(self.pipeline['completed'])
+
+    def __init__(self, *args, **kwargs):
+        self.period_rate = Rate(per_second=2000).value
+        self.sample_io = None
+        self.rates = [self.period_rate]
+        super().__init__(*args, **kwargs)
+
+    def adjust(self):
+        if self.sample_io is None:
+            return
+
+        if self.sample_io not in self.pipeline['completed'] and \
+                self.sample_io not in self.pipeline['consumed']:
+            return
+
+        if len(self.rates) < 2:
+            self.rates.append(self.period_rate)
+            return
+
+        old_rate = self.rates[-2]
+
+        if self.completed == 0:
+            new_rate = old_rate * 2
+        else:
+            new_rate = old_rate / 2
+
+        self.rates.append(new_rate)
+        self.period_rate = new_rate
+        self.sample_io = None
+
+    def to_move(self):
+        to_move = super().to_move()
+
+        if not to_move:
+            return to_move
+
+        if self.sample_io is None:
+            self.sample_io = next(iter(to_move))
+
+        return to_move
+
+    def run(self, *args, **kwargs):
+        self.adjust()
+        super().run(*args, **kwargs)
 
 
 prefetcher_list = [
