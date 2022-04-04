@@ -1,4 +1,4 @@
-from prefetch_modeler.core import GateBucket
+from prefetch_modeler.core import GateBucket, ContinueBucket, GlobalCapacityBucket
 
 
 class Prefetcher(GateBucket):
@@ -90,20 +90,19 @@ class AdjustedPrefetcher2(Prefetcher):
         #     self.completion_target_distance = self.bounded_bump(self.in_progress, 1.2, caps)
 
 
-class BaselineSync(Prefetcher):
-    def wanted_move_size(self):
-        if not self.pipeline['completed'].movement_size:
-            return 0
+class BaselineSync(GlobalCapacityBucket):
+    name = 'remaining'
 
-        if self.pipeline['completed'].movement_size > 0:
-            return 1
-        return 0
+    def max_buffers(self):
+        return 1
 
 
-class BaselineFetchAll(Prefetcher):
-    def wanted_move_size(self):
-        return len(self)
+class BaselineFetchAll(ContinueBucket):
+    name = 'remaining'
+
 
 prefetcher_list = [
+    [BaselineFetchAll],
+    [BaselineSync],
     [AdjustedPrefetcher2],
 ]

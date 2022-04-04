@@ -44,6 +44,16 @@ class DialBucket(Bucket):
         return frozenset(io for io in self.source if io.move_at <= self.tick)
 
 
+class ContinueBucket(Bucket):
+    """A bucket that will move all its available IOs on each tick."""
+
+    def to_move(self):
+        return frozenset(self.source)
+
+    def next_action(self):
+        return self.tick + 1 if self.source else math.inf
+
+
 class StopBucket(Bucket):
     """An immobile bucket."""
 
