@@ -9,13 +9,13 @@ class Prefetcher(GateBucket):
     the option of modifying the algorithm on each run.
     """
 
-    cap_in_progress = 200
+    target_in_progress = 200
     completion_target_distance = 7
     min_dispatch = 1
 
     def __init__(self, *args, **kwargs):
-        if self.completion_target_distance > self.cap_in_progress:
-            raise ValueError(f'Value {self.completion_target_distance} for completion_target_distance exceeds cap_in_progress value of {self.cap_in_progress}.')
+        if self.completion_target_distance > self.target_in_progress:
+            raise ValueError(f'Value {self.completion_target_distance} for completion_target_distance exceeds target_in_progress value of {self.target_in_progress}.')
         super().__init__(*args, **kwargs)
 
     def adjust(self):
@@ -25,7 +25,7 @@ class Prefetcher(GateBucket):
         self.tick_data['completion_target_distance'] = self.completion_target_distance
         self.tick_data['min_dispatch'] = self.min_dispatch
 
-        if self.in_progress + self.min_dispatch > self.cap_in_progress:
+        if self.in_progress + self.min_dispatch > self.target_in_progress:
             return 0
 
         if self.in_progress + self.min_dispatch > self.completion_target_distance:
@@ -36,7 +36,7 @@ class Prefetcher(GateBucket):
 
         will_submit = min(len(self), to_submit)
 
-        print(f'ctd: {self.completion_target_distance}. min_dispatch: {self.min_dispatch}. cap_in_progress: {self.cap_in_progress}. in_progress: {self.in_progress}. to_submit is {to_submit}. will_submit: {will_submit}.')
+        print(f'ctd: {self.completion_target_distance}. min_dispatch: {self.min_dispatch}. target_in_progress: {self.target_in_progress}. in_progress: {self.in_progress}. to_submit is {to_submit}. will_submit: {will_submit}.')
         return to_submit
 
 
@@ -82,7 +82,7 @@ class AdjustedPrefetcher2(Prefetcher):
         # if submitted > 1.2 * inflight:
         #     self.completion_target_distance = self.bounded_bump(ctd, 0.8, caps)
 
-        caps = [self.cap_in_progress]
+        caps = [self.target_in_progress]
         # if self.completed < 0.8 * ctd:
         #     self.completion_target_distance = self.bounded_bump(ctd, 1.2, caps)
 
