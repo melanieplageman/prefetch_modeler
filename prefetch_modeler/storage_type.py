@@ -43,7 +43,7 @@ def local_storage_latency(self):
 
 fast_local1 = storage_type(
     max_buffers = 200,
-    kernel_invoke_batch_size = 5,
+    kernel_invoke_batch_size = 1,
     submission_overhead_func = submission_latency,
     completion_latency_func = local_storage_latency,
     max_iops=Rate(per_second=20000).value,
@@ -54,7 +54,7 @@ def cloud_storage_latency(self):
 
 slow_cloud1 = storage_type(
     max_buffers = 200,
-    kernel_invoke_batch_size = 5,
+    kernel_invoke_batch_size = 1,
     submission_overhead_func = submission_latency,
     completion_latency_func = cloud_storage_latency,
     max_iops=Rate(per_second=2000).value,
