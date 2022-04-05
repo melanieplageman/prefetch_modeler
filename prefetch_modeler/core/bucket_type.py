@@ -62,25 +62,10 @@ class StopBucket(Bucket):
 
 
 class RateBucket(Bucket):
-    """
-    A bucket that will move a number of IOs at a specified rate or interval.
-
-    The rate is specified as a `Fraction` such that the bucket will move a
-    number of IOs as represented by the numerator each interval as represented
-    by the denominator. For example, with a rate of 2 / 3, 2 IOs are moved
-    every 3 ticks.
-
-    Each IO is "independent", in that each number between 1 and the numerator
-    is considered a separate "slot". In the earlier example, if, on a
-    particular tick, the bucket is only able to move 1 IO, then an incoming IO
-    is eligible to move immediately on the subsequent tick (rather than in 3
-    ticks) as that "slot" is unoccupied.
-    """
-
     def __init__(self, *args, **kwargs):
-        self.slot = []
-        self._movement_size = None
-        self.interval = None
+        self._rate = self.rate()
+        self.volume = self.maximum_volume
+        self.last_tick = 0
         super().__init__(*args, **kwargs)
 
     def rate(self):
@@ -88,57 +73,38 @@ class RateBucket(Bucket):
         raise NotImplementedError()
 
     @property
-    def movement_size(self):
-        return self._movement_size
-
-    @movement_size.setter
-    def movement_size(self, movement_size):
-        # Prepend slots with tick zero when the movement size is increased
-        if movement_size > len(self.slot):
-            self.slot = [0] * (movement_size - len(self.slot)) + self.slot
-        self._movement_size = movement_size
+    def maximum_volume(self):
+        return math.ceil(math.ceil(self._rate) / self._rate) * self._rate
 
     def to_move(self):
-        rate = self.rate()
-        # if (rate := self.rate()) < 0:
-        #     raise ValueError(f"Bucket rate {rate} can't be negative")
-        self.movement_size, self.interval = rate.as_integer_ratio()
+        self.volume += (self.tick - self.last_tick) * self._rate
+        self.volume = min(self.volume, self.maximum_volume)
 
-        # Only look at the slots up to self.movement_size! We never reduce the
-        # length of self.slot. This will be the list of indices into self.slot
-        # that represent slots that are usable (self.interval has elapsed since
-        # that slot's last activation).
-        usable = []
-        for i in range(self.movement_size):
-            if self.slot[i] + self.interval > self.tick:
-                break
-            usable.append(i)
+        moveable = max(math.floor(self.volume), 0)
 
-        self.tick_data['want_to_move'] = len(usable)
-        self.tick_data['wait'] = len(usable) > len(self)
-        result = frozenset(itertools.islice(self.source, len(usable)))
+        self.tick_data['want_to_move'] = moveable
+        self.tick_data['wait'] = moveable > len(self.source)
 
-        # Only update the slot if it's used. Then ensure that the slot list is
-        # sorted.
-        for i in usable[:len(result)]:
-            self.slot[i] = self.tick
-        self.slot.sort()
+        result = frozenset(itertools.islice(self.source, moveable))
+        self.volume -= len(result)
+
+        self.last_tick, self._rate = self.tick, self.rate()
 
         return result
 
     def next_action(self):
-        if self.movement_size == 0:
-            return math.inf
+        if not self.source:
+            if self.volume >= self.maximum_volume:
+                return math.inf
+            interval = (self.maximum_volume - self.volume) / self._rate
+            return self.tick + math.ceil(interval)
 
-        # We always need to take action on the next consumption. Otherwise,
-        # wait isn't recorded for this bucket.
-        if not self.source and self.slot[0] + self.interval < self.tick:
-            return math.inf
+        if self.volume >= 1:
+            return self.tick + 1
 
-        # self._last_consumption + self._consumption_interval is the next tick
-        # that this bucket should consume, if this bucket has been full since
-        # the last time it consumed.
-        return max(self.slot[0] + self.interval, self.tick + 1)
+        # The next tick that an IO will be moveable
+        interval = (1 - self.volume) / self._rate
+        return self.tick + math.ceil(interval)
 
 
 class ThresholdBucket(Bucket):
