@@ -111,6 +111,7 @@ def io_title(pipeline_config):
 def io_data(data):
     view = pd.DataFrame(index=data.index)
     rename = {
+        'remaining': 'remaining_num_ios',
         # 'do_sync_fetch': 'baseline_sync_to_move',
         # 'do_fetch_all': 'baseline_all_to_move',
         # 'do_prefetch': 'remaining_to_move',
@@ -123,6 +124,7 @@ def io_data(data):
         # 'do_complete': 'inflight_to_move',
         'completed_not_consumed': 'completed_num_ios',
         # 'do_consume': 'completed_to_move',
+        'done': 'consumed_num_ios',
         # 'completion_target_distance': 'remaining_completion_target_distance',
         'min_dispatch': 'remaining_min_dispatch',
     }

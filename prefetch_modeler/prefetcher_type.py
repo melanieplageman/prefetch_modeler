@@ -1,5 +1,7 @@
+from enum import Enum
 from prefetch_modeler.core import GateBucket, ContinueBucket, \
 GlobalCapacityBucket, RateBucket, Rate
+from fractions import Fraction
 
 
 class Prefetcher(GateBucket):
@@ -85,21 +87,77 @@ class BaselineSync(GlobalCapacityBucket):
 class BaselineFetchAll(ContinueBucket):
     name = 'remaining'
 
+class Correction(Enum):
+    UNKNOWN = 0
+    NONE = 1
+    UP = 2
+    DOWN = 3
+
+class PeriodRate:
+    def __init__(self, rate, required_correction):
+        self.rate = rate
+        self.required_correction = required_correction
+
+
 class CoolPrefetcher(RateBucket):
     name = 'remaining'
 
     def rate(self):
-        return self.period_rate
+        return self.period_rate.rate
 
     @property
     def completed(self):
         return len(self.pipeline['completed'])
 
     def __init__(self, *args, **kwargs):
-        self.period_rate = Rate(per_second=2000).value
+        self.period_rate = PeriodRate(rate=Rate(per_second=200).value,
+                                      required_correction=Correction.UNKNOWN)
         self.sample_io = None
         self.rates = [self.period_rate]
+        self.completed_history = [0]
+        self.last_adjust_tick = 0
         super().__init__(*args, **kwargs)
+
+    def judge_old_rate(self, old_rate, completed, completed_history):
+        completed_headroom = 2
+        if completed < completed_history[-1] or completed < completed_headroom:
+            return Correction.UP
+        return Correction.DOWN
+
+    def calculate_new_rate1(self, completed, completed_history, rate_history):
+        low_rates = [pr for pr in rate_history[-8:] if pr.required_correction == Correction.UP]
+        high_rates = [pr for pr in rate_history[-8:] if pr.required_correction == Correction.DOWN]
+        max_low_rate = max(low_rates, key=lambda x: x.rate) if low_rates else None
+        min_high_rate = min(high_rates, key=lambda x: x.rate) if high_rates else None
+
+        if max_low_rate is None and min_high_rate is None:
+            raise ValueError()
+
+        elif max_low_rate is None:
+            new_rate = PeriodRate(rate = min_high_rate.rate / 2,
+                                        required_correction=Correction.UNKNOWN)
+
+        elif min_high_rate is None:
+            new_rate = PeriodRate(rate = max_low_rate.rate * 2,
+                                        required_correction=Correction.UNKNOWN)
+
+        else:
+            new_rate = PeriodRate(rate = (min_high_rate.rate + max_low_rate.rate) / 2,
+                                            required_correction=Correction.UNKNOWN)
+        new_rate.rate = (new_rate.rate + rate_history[-1].rate) / 2
+        return new_rate
+
+    def decrease_rate(self, interval, completed, completed_history, rate_history):
+        completed_change_rate = Fraction(completed - completed_history[-1],
+                                         interval)
+
+        old_rate = rate_history[-2]
+        new_rate = PeriodRate(rate = old_rate.rate - completed_change_rate,
+                              required_correction=Correction.UNKNOWN)
+
+        if new_rate.rate < 0:
+            new_rate.rate = old_rate / 2
+        return new_rate
 
     def adjust(self):
         if self.sample_io is None:
@@ -111,17 +169,39 @@ class CoolPrefetcher(RateBucket):
 
         if len(self.rates) < 2:
             self.rates.append(self.period_rate)
+            self.completed_history.append(self.completed)
             return
 
         old_rate = self.rates[-2]
+        old_rate.required_correction = self.judge_old_rate(old_rate,
+                                                           self.completed,
+                                                           self.completed_history)
 
-        if self.completed == 0:
-            new_rate = old_rate * 2
+        # # if len(self.rates) > 10 and len(self.rates) < 15:
+        # adjustment_str = f"completed: {self.completed}. "
+        # for rate in self.rates:
+        #     adjustment_str += f". {float(rate.rate)}-{rate.required_correction}"
+        # print("ADJUSTMENT:" + adjustment_str)
+
+        if old_rate.required_correction == Correction.UP:
+            new_rate = PeriodRate(rate=old_rate.rate * 2,
+                                   required_correction=Correction.UNKNOWN)
+            # new_rate1 = self.calculate_new_rate1(self.completed,
+            #                                 self.completed_history, self.rates)
+
         else:
-            new_rate = old_rate / 2
+            interval = self.tick - self.last_adjust_tick
+            new_rate = self.decrease_rate(interval, self.completed,
+                                                 self.completed_history,
+                                                 self.rates)
 
-        self.rates.append(new_rate)
+        self.tick_data['pf_rate'] = float(new_rate.rate)
+
+
+        self.last_adjust_tick = self.tick
         self.period_rate = new_rate
+        self.rates.append(self.period_rate)
+        self.completed_history.append(self.completed)
         self.sample_io = None
 
     def to_move(self):
@@ -141,7 +221,8 @@ class CoolPrefetcher(RateBucket):
 
 
 prefetcher_list = [
-    [BaselineFetchAll],
-    [BaselineSync],
-    [AdjustedPrefetcher2],
+    # [BaselineFetchAll],
+    # [BaselineSync],
+    [CoolPrefetcher],
+    # [AdjustedPrefetcher2],
 ]

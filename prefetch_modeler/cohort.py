@@ -65,6 +65,7 @@ class Cohort:
 
         for member in self.members:
             figure, axes = plt.subplots(2)
+            figure.set_size_inches(24, 16)
             axes[0].set_xlim([0, xlim])
             member.io_view.plot(ax=axes[0], title='sample')
 
