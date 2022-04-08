@@ -17,10 +17,11 @@ def test_consumption_rate(self):
 even_wl = workload_type(test_consumption_rate)
 
 def consumption_rate_func2(self):
-    if self.tick <= 5000:
+    if getattr(self, 'tick', 0) <= 5000:
+        return Rate(per_second=2000).value
+    elif getattr(self, 'tick', 0) <= 20000:
         return Rate(per_second=5000).value
     else:
-        rate = Rate(per_second=20000).value
-        return rate
+        return Rate(per_second=10000).value
 
 uneven_wl = workload_type(consumption_rate_func2)
