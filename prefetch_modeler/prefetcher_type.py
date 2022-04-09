@@ -29,6 +29,10 @@ class Interval:
     tick: int
     rate: Fraction
     completed: int
+    # Note that this is in-progress IOs which are not in flight and not
+    # completed -- waiting to be inflight
+    awaiting_dispatch: int
+    inflight: int
 
     length: Optional[int] = None
 
@@ -47,48 +51,44 @@ class CoolPrefetcher(RateBucket):
 
     initial_rate = Rate(per_second=2000).value
     completed_headroom = 10
+    awaiting_dispatch_headroom = 4
     multiplier = 2
 
     def __init__(self, *args, **kwargs):
-        self.ledger = [Interval(tick=0, rate=self.initial_rate, completed=0)]
+        self.ledger = [Interval(tick=0, rate=self.initial_rate, completed=0,
+                                awaiting_dispatch=0, inflight=0)]
         self.sample_io = None
         super().__init__(*args, **kwargs)
 
-    def next_rate_up(self, rate, complete_dt):
-        next_rate = rate - complete_dt
+    def next_rate_up(self, rate, dt, backlog, headroom):
+        next_rate = rate - dt
         if next_rate < rate * self.multiplier:
             next_rate = rate * self.multiplier
 
-        next_rate -= self.burn_down_rate()
+        next_rate -= self.burn_down_rate(backlog, headroom)
         if next_rate < rate:
             return rate
         return next_rate
 
-    def next_rate_down(self, rate, complete_dt):
-        next_rate = rate - complete_dt - self.burn_down_rate()
+    def next_rate_down(self, rate, dt, backlog, headroom):
+        next_rate = rate - dt - self.burn_down_rate(backlog, headroom)
+
         if next_rate < rate / self.multiplier:
             next_rate = rate / self.multiplier
         return next_rate
 
-    def burn_down_rate(self):
+    def burn_down_rate(self, backlog, headroom):
         # How long will the next period be? Let's use a recency biased mean of
         # the last periods
         next_period_length = recent_mean(period.length for period in reversed(self.ledger))
 
         # How many completed IOs do we want to burn down?
-        burn_down = self.completed - self.completed_headroom
+        burn_down = backlog - headroom
 
         if burn_down <= 0:
             return 0
 
         return Fraction.from_float(burn_down / next_period_length)
-
-    def correction(self):
-        if self.completed < self.period.completed:
-            return 'up'
-        if self.completed < self.completed_headroom:
-            return 'up'
-        return 'down'
 
     def adjust(self):
         self.period.length = self.tick - self.period.tick
@@ -98,14 +98,45 @@ class CoolPrefetcher(RateBucket):
             completed_dt = Fraction(self.completed - self.period.completed,
                                     self.period.length)
 
+            awaiting_dispatch_dt = Fraction(self.awaiting_dispatch - self.period.awaiting_dispatch,
+                                            self.period.length)
+
             old_rate = self.ledger[-2].rate
 
-            if self.correction() == 'down':
-                rate = self.next_rate_down(old_rate, completed_dt)
-            else:
-                rate = self.next_rate_up(old_rate, completed_dt)
+            print(f"completed_dt: {completed_dt}. awaiting_dispatch_dt: {awaiting_dispatch_dt}")
+            # if completed_dt > awaiting_dispatch_dt or \
+            #         self.completed > self.completed_headroom:
+            if completed_dt > 0 or self.completed > self.completed_headroom:
+                rate = self.next_rate_down(old_rate, completed_dt,
+                                           self.completed,
+                                           self.completed_headroom)
 
-        period = Interval(tick=self.tick, rate=rate, completed=self.completed)
+            elif awaiting_dispatch_dt > 0 or self.awaiting_dispatch > self.awaiting_dispatch_headroom:
+                print('here')
+                rate = self.next_rate_down(old_rate, awaiting_dispatch_dt,
+                                           self.awaiting_dispatch,
+                                           self.awaiting_dispatch_headroom)
+
+            else:
+                rate = self.next_rate_up(old_rate, completed_dt,
+                                         self.completed,
+                                         self.completed_headroom)
+
+        if rate != self.period.rate:
+            previous_ad = self.ledger[-1].awaiting_dispatch
+            previous_comp = self.ledger[-1].completed
+            previous_if = self.ledger[-1].inflight
+            ad_str = f"awaiting_dispatch: {previous_ad}, {self.awaiting_dispatch}. "
+            if_str = f"inflight: {previous_if}, {self.inflight}. "
+            comp_str = f"completed: {previous_comp}, {self.completed}. "
+            rate_str = f"old_rate: {self.period.rate}, new_rate: {rate}. "
+            print(ad_str + if_str + comp_str + rate_str)
+
+
+        period = Interval(tick=self.tick, rate=rate, completed=self.completed,
+                          awaiting_dispatch=self.awaiting_dispatch,
+                          inflight=self.inflight)
+
         self.ledger.append(period)
         self.sample_io = None
 
@@ -132,6 +163,18 @@ class CoolPrefetcher(RateBucket):
         return self.ledger[-1]
 
     @property
+    def in_progress(self):
+        return self.counter - len(self.pipeline['consumed'])
+
+    @property
+    def awaiting_dispatch(self):
+        return self.in_progress - self.inflight - self.completed - len(self)
+
+    @property
+    def inflight(self):
+        return len(self.pipeline['inflight'])
+
+    @property
     def completed(self):
         return len(self.pipeline['completed'])
 
@@ -149,7 +192,7 @@ class CoolPrefetcher(RateBucket):
 
 
 prefetcher_list = [
-    # [BaselineFetchAll],
+    [BaselineFetchAll],
     # [BaselineSync],
     [CoolPrefetcher],
     # [AdjustedPrefetcher2],
