@@ -12,9 +12,12 @@ class Member:
         self.storage = storage
         self.workload = workload
         self.prefetcher = prefetcher
+        self.schema = None
 
     def run(self):
         simulation = Simulation(*self.prefetcher, *self.storage, *self.workload)
+        self.schema = simulation.schema
+
         result = simulation.run(200, duration=Duration(seconds=10), traced=[1, 5, 100])
         data = result.bucket_data
         self.data = data.reindex(data.index.union(data.index[1:] - 1), method='ffill')
@@ -67,7 +70,12 @@ class Cohort:
             figure, axes = plt.subplots(2)
             figure.set_size_inches(15, 11)
             axes[0].set_xlim([0, xlim])
-            member.io_view.plot(ax=axes[0], title='sample')
+
+            title_str = ", ".join(hint for i, hint in
+                sorted(bucket_type.hint() for bucket_type in member.schema if
+                       bucket_type.hint() is not None)
+            )
+            member.io_view.plot(ax=axes[0], title=title_str)
 
             axes[1].get_yaxis().set_visible(False)
             axes[1].set_xlim([0, xlim])

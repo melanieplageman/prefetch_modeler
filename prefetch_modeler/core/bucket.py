@@ -98,6 +98,10 @@ class Bucket(collections.abc.MutableSet):
 
         super().__init__()
 
+    @classmethod
+    def hint(cls):
+        return None
+
     def __repr__(self):
         return f"{type(self).__name__}({self.name!r})"
 

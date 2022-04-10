@@ -51,16 +51,20 @@ def recent_mean(iterator, take=8):
 class CoolPrefetcher(RateBucket):
     name = 'remaining'
 
-    initial_rate = Rate(per_second=2000).value
+    og_rate = Rate(per_second=2000)
     completed_headroom = 10
     awaiting_dispatch_headroom = 4
     multiplier = 2
 
     def __init__(self, *args, **kwargs):
-        self.ledger = [Interval(tick=0, rate=self.initial_rate, completed=0,
+        self.ledger = [Interval(tick=0, rate=self.og_rate.value, completed=0,
                                 awaiting_dispatch=0, inflight=0)]
         self.sample_io = None
         super().__init__(*args, **kwargs)
+
+    @classmethod
+    def hint(cls):
+        return (2, f"Starting Prefetch Rate: {cls.og_rate}")
 
     def next_rate_up(self, rate, dt, backlog, headroom):
         next_rate = rate - dt
