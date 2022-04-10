@@ -36,6 +36,8 @@ class Interval:
 
     length: Optional[int] = None
 
+    too_fast_for_storage: bool = False
+
 
 def recent_mean(iterator, take=8):
     numerator = denominator = 0
@@ -104,23 +106,33 @@ class CoolPrefetcher(RateBucket):
             old_rate = self.ledger[-2].rate
 
             print(f"completed_dt: {completed_dt}. awaiting_dispatch_dt: {awaiting_dispatch_dt}")
-            # if completed_dt > awaiting_dispatch_dt or \
-            #         self.completed > self.completed_headroom:
             if completed_dt > 0 or self.completed > self.completed_headroom:
                 rate = self.next_rate_down(old_rate, completed_dt,
                                            self.completed,
                                            self.completed_headroom)
 
             elif awaiting_dispatch_dt > 0 or self.awaiting_dispatch > self.awaiting_dispatch_headroom:
-                print('here')
                 rate = self.next_rate_down(old_rate, awaiting_dispatch_dt,
                                            self.awaiting_dispatch,
                                            self.awaiting_dispatch_headroom)
+                self.ledger[-2].too_fast_for_storage = True
 
             else:
-                rate = self.next_rate_up(old_rate, completed_dt,
-                                         self.completed,
-                                         self.completed_headroom)
+                too_fast_rates = [period.rate for period in
+                                  reversed(self.ledger) if
+                                  period.too_fast_for_storage]
+                if too_fast_rates:
+                    too_fast_rate = recent_mean(too_fast_rates)
+                else:
+                    too_fast_rate = None
+
+                if too_fast_rate is not None and old_rate > too_fast_rate:
+                    rate = (old_rate + too_fast_rate) / 2
+                else:
+                    rate = self.next_rate_up(old_rate, completed_dt,
+                                            self.completed,
+                                            self.completed_headroom)
+
 
         if rate != self.period.rate:
             previous_ad = self.ledger[-1].awaiting_dispatch
@@ -141,6 +153,7 @@ class CoolPrefetcher(RateBucket):
         self.sample_io = None
 
     def to_move(self):
+        self.tick_data['awaiting_dispatch'] = self.awaiting_dispatch
         to_move = super().to_move()
         if self.sample_io is None:
             self.sample_io = next(iter(to_move), None)
