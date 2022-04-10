@@ -23,6 +23,17 @@ class PeriodRate:
         self.rate = rate
         self.required_correction = required_correction
 
+class ConstantPrefetcher(RateBucket):
+    name = 'remaining'
+
+    og_rate = Rate(per_second=2000)
+
+    @classmethod
+    def hint(cls):
+        return (2, f"Constant Rate: {cls.og_rate}")
+
+    def rate(self):
+        return self.og_rate.value
 
 @dataclass
 class Interval:
