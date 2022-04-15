@@ -88,6 +88,8 @@ class RateBucket(Bucket):
         result = frozenset(itertools.islice(self.source, moveable))
         self.volume -= len(result)
 
+        self.tick_data['rate'] = float(self.rate())
+
         self.last_tick, self._rate = self.tick, self.rate()
 
         return result

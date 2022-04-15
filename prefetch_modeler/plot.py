@@ -123,6 +123,7 @@ def io_data(data):
         'inflight': 'inflight_num_ios',
         # 'do_complete': 'inflight_to_move',
         'completed_not_consumed': 'completed_num_ios',
+        # 'awaiting_dispatch': 'remaining_awaiting_dispatch',
         # 'do_consume': 'completed_to_move',
         'done': 'consumed_num_ios',
         # 'completion_target_distance': 'remaining_completion_target_distance',
@@ -131,6 +132,23 @@ def io_data(data):
     rename = {k: data[v] for k, v in rename.items() if v in data}
     view = view.assign(**rename)
     return view
+
+def consumption_rate_data(data):
+    cr_view = pd.DataFrame(index=data.index)
+    cr_rename = {
+        # 'consumption_rate': 'completed_rate',
+        # 'prefetch_rate': 'remaining_rate',
+    }
+    cr_rename = {k: data[v] for k, v in cr_rename.items() if v in data}
+    cr_view = cr_view.assign(**cr_rename)
+
+    if 'consumption_rate' in cr_view:
+        cr_view['consumption_rate'] = [value * 1000 * 1000 for value in cr_view['consumption_rate']]
+    if 'prefetch_rate' in cr_view:
+        cr_view['prefetch_rate'] = [value * 1000 * 1000 for value in cr_view['prefetch_rate']]
+    dropped_columns = [column for column in cr_view if column not in cr_rename.keys()]
+    cr_view = cr_view.drop(columns=dropped_columns)
+    return cr_view
 
 def wait_data(data):
     wait_view = pd.DataFrame(index=data.index)

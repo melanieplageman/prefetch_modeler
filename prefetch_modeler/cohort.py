@@ -1,6 +1,6 @@
 from prefetch_modeler.storage_type import fast_local1, slow_cloud1
 from prefetch_modeler.core import Duration, Rate, Simulation
-from prefetch_modeler.plot import io_data, wait_data
+from prefetch_modeler.plot import io_data, wait_data, consumption_rate_data
 import matplotlib.pyplot as plt
 
 class Member:
@@ -9,6 +9,7 @@ class Member:
         self.tracer_data = None
         self._wait_view = None
         self._io_view = None
+        self._consumption_rate_view = None
         self.storage = storage
         self.workload = workload
         self.prefetcher = prefetcher
@@ -28,6 +29,12 @@ class Member:
         if self._wait_view is None:
             self._wait_view = wait_data(self.data)
         return self._wait_view
+
+    @property
+    def consumption_rate_view(self):
+        if self._consumption_rate_view is None:
+            self._consumption_rate_view = consumption_rate_data(self.data)
+        return self._consumption_rate_view
 
     @property
     def io_view(self):
@@ -55,11 +62,11 @@ class Cohort:
         for member in self.members:
             member.run()
 
-
     def dump_plots(self, storage_name, workload_name):
         xlim, xwaitlim = 0, 0
         for member in self.members:
-            max_x = max(member.io_view.index)
+            max_x = max(max(member.consumption_rate_view.index),
+                        max(member.io_view.index))
             max_wait_x = max(member.wait_view.index)
             xlim = max_x if max_x > xlim else xlim
             xwaitlim = max_wait_x if max_wait_x > xwaitlim else xwaitlim
@@ -76,6 +83,7 @@ class Cohort:
                        bucket_type.hint() is not None)
             )
             member.io_view.plot(ax=axes[0], title=title_str)
+            member.consumption_rate_view.plot(ax=axes[0], secondary_y=True)
 
             axes[1].get_yaxis().set_visible(False)
             axes[1].set_xlim([0, xlim])
