@@ -19,7 +19,7 @@ class Member:
         simulation = Simulation(*self.prefetcher, *self.storage, *self.workload)
         self.schema = simulation.schema
 
-        result = simulation.run(200, duration=Duration(seconds=10), traced=[1, 5, 100])
+        result = simulation.run(500, duration=Duration(seconds=20), traced=[1, 5, 100])
         data = result.bucket_data
         self.data = data.reindex(data.index.union(data.index[1:] - 1), method='ffill')
         self.tracer_data = result.tracer_data
@@ -90,8 +90,8 @@ class Cohort:
             member.wait_view.astype(int).plot.area(ax=axes[1], stacked=False)
 
             prefetcher_name = '_'.join([bucket.__name__ for bucket in member.prefetcher])
-            plt.savefig(f'{directory}/{prefetcher_name}.png')
-            # plt.show()
+            # plt.savefig(f'{directory}/{prefetcher_name}.png')
+            plt.show()
 
             if not member.tracer_view.empty:
                 member.tracer_view.plot(kind='barh', stacked=True)

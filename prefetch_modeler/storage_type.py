@@ -29,7 +29,6 @@ def storage_type(hint,
         def target_capacity(self):
             capacity = completion_latency_func(self) * max_iops
             capacity = int(capacity)
-            print(capacity)
             if capacity < 1:
                 raise ValueError("Capacity can't be less than 1")
             return capacity

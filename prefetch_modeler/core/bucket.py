@@ -10,6 +10,7 @@ DEBUG = False
 
 class Pipeline:
     template = []
+    run_prefetch = False
 
     def __init__(self, *args):
         self.buckets = [bucket_type(name, self) for name, bucket_type in self.template]
@@ -67,6 +68,10 @@ class Pipeline:
             bucket_name, next_tick = min(
                 actionable.items(),
                 key=lambda item: item[1])
+
+            if self.run_prefetch is True:
+                next_tick = last_tick + 1
+                self.run_prefetch = False
 
             if DEBUG and next_tick - last_tick == 1:
                 print(last_tick, actionable)
@@ -147,8 +152,14 @@ class Bucket(collections.abc.MutableSet):
         to_move = self.to_move()
         self.tick_data['to_move'] = len(to_move)
 
-        if len(to_move) and LOG_BUCKETS:
-            print(f'{self.tick}: moving {len(to_move)} IOs from {self} to {self.target}')
+        if len(to_move):
+            if LOG_BUCKETS:
+                print(f'{self.tick}: moving {len(to_move)} IOs from {self} to {self.target}')
+            if self.name == 'inflight':
+                if self.pipeline['remaining'].sample_io in to_move:
+                    print(f'{self.tick}: moving sample IO from {self} to {self.target}')
+                    self.pipeline.run_prefetch = True
+
         for io in to_move:
             self.remove(io)
             self.target.add(io)

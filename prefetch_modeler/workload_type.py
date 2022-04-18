@@ -28,4 +28,12 @@ def consumption_rate_func2(self):
     else:
         return Rate(per_second=10000).value
 
-uneven_wl = workload_type('Uneven Workload', consumption_rate_func2)
+def consumption_rate_func3(self):
+    if getattr(self, 'tick', 0) <= 5000:
+        return Rate(per_second=2000).value
+    elif getattr(self, 'tick', 0) <= 20000:
+        return Rate(per_second=500).value
+    else:
+        return Rate(per_second=10000).value
+
+uneven_wl = workload_type('Uneven Workload', consumption_rate_func3)

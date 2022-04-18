@@ -120,14 +120,16 @@ def io_data(data):
         # 'do_invoke_kernel': 'w_claimed_buffer_to_move',
         # 'do_submit': 'kernel_batch_to_move',
         # 'do_dispatch': 'submitted_to_move',
-        'inflight': 'inflight_num_ios',
+        # 'submitted': 'submitted_num_ios',
+        # 'inflight': 'inflight_num_ios',
         # 'do_complete': 'inflight_to_move',
         'completed_not_consumed': 'completed_num_ios',
         # 'awaiting_dispatch': 'remaining_awaiting_dispatch',
         # 'do_consume': 'completed_to_move',
         'done': 'consumed_num_ios',
         # 'completion_target_distance': 'remaining_completion_target_distance',
-        'min_dispatch': 'remaining_min_dispatch',
+        # 'min_dispatch': 'remaining_min_dispatch',
+        # 'consumption_rate': 'completed_rate',
     }
     rename = {k: data[v] for k, v in rename.items() if v in data}
     view = view.assign(**rename)
@@ -136,8 +138,8 @@ def io_data(data):
 def consumption_rate_data(data):
     cr_view = pd.DataFrame(index=data.index)
     cr_rename = {
-        # 'consumption_rate': 'completed_rate',
-        # 'prefetch_rate': 'remaining_rate',
+        'consumption_rate': 'completed_rate',
+        'prefetch_rate': 'remaining_rate',
     }
     cr_rename = {k: data[v] for k, v in cr_rename.items() if v in data}
     cr_view = cr_view.assign(**cr_rename)
@@ -161,7 +163,7 @@ def wait_data(data):
             axis='columns')
 
     wait_rename = {
-        'wait_dispatch': 'submitted_wait',
+        # 'wait_dispatch': 'submitted_wait',
         'wait_consume': 'completed_wait',
     }
 

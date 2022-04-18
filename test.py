@@ -11,8 +11,15 @@ from prefetch_modeler.cohort import Member, Cohort
 
 
 cohort1 = Cohort()
-cohort1.run(slow_cloud1, even_wl, prefetcher_list)
-cohort1.dump_plots(storage_name='slow_cloud1', workload_name='even_wl')
 
-# cohort1.run(fast_local1, uneven_wl, prefetcher_list)
+# cohort1.run(slow_cloud1, even_wl, prefetcher_list)
+# cohort1.dump_plots(storage_name='slow_cloud1', workload_name='even_wl')
+
+# cohort1.run(fast_local1, even_wl, prefetcher_list)
 # cohort1.dump_plots(storage_name='fast_local1', workload_name='even_wl')
+
+# cohort1.run(slow_cloud1, uneven_wl, prefetcher_list)
+# cohort1.dump_plots(storage_name='slow_cloud1', workload_name='uneven_wl')
+
+cohort1.run(fast_local1, uneven_wl, prefetcher_list)
+cohort1.dump_plots(storage_name='fast_local1', workload_name='uneven_wl')
