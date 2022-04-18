@@ -208,6 +208,7 @@ class CoolPrefetcher(RateBucket):
 
     def run(self, *args, **kwargs):
         if self.should_adjust():
+            print(f'adjusting on tick {self.tick}')
             self.adjust()
         super().run(*args, **kwargs)
 
@@ -226,7 +227,6 @@ class PIDPrefetcher(RateBucket):
     ki = -Rate(per_second=1000).value
     completed_headroom = 10
     og_rate = Rate(per_second=2000)
-    dispatched_sample = False
 
     def __init__(self, *args, **kwargs):
         self.ledger = [Interval(tick=0, rate=self.og_rate.value, completed=0,
@@ -303,6 +303,7 @@ class PIDPrefetcher(RateBucket):
 
         result = frozenset(itertools.islice(self.source, moveable))
         self.volume -= len(result)
+        # print(f"volume: {self.volume}. len result: {len(result)}")
 
         self.last_tick, self._rate = self.tick, self.rate()
 
@@ -315,8 +316,6 @@ class PIDPrefetcher(RateBucket):
         else:
             to_move = self.zero_rate_move()
 
-        if self.sample_io is None:
-            self.sample_io = next(iter(to_move), None)
 
         return to_move
 
@@ -336,10 +335,20 @@ class PIDPrefetcher(RateBucket):
     def completed(self):
         return len(self.pipeline['completed'])
 
+    def dispatch_sample(self):
+        if len(self.source) == 0:
+            return
+        self.sample_io = self.source.pop()
+        self.target.add(self.sample_io)
+        print(f"dispatching sample_io on tick {self.tick}.")
+
     def run(self, *args, **kwargs):
-        if self.should_adjust():
+        if self.tick == 0:
+            self.dispatch_sample()
+        elif self.should_adjust():
             print(f'adjusting on tick {self.tick}')
             self.adjust()
+            self.dispatch_sample()
         super().run(*args, **kwargs)
 
     def next_action(self):
@@ -351,14 +360,8 @@ class PIDPrefetcher(RateBucket):
         if self.rate() != 0:
             return super().next_action()
 
-        # If the rate is 0, and we haven't dispatched our sample, we want to
-        # move on the next tick
-        if not self.dispatched_sample:
-            self.dispatched_sample = True
-            return self.tick + 1
-
-        # If we already dispatched our sample, we want to wait to move until
-        # the sample is in completed or consumed
+        # If our rate is 0 and we dispatched our sample, we want to wait to
+        # move until the sample is in completed or consumed
         if self.should_adjust():
             return self.tick + 1
 
