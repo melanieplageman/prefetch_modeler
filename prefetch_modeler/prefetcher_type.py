@@ -1,9 +1,8 @@
 from enum import Enum
 from prefetch_modeler.core import GateBucket, ContinueBucket, \
-GlobalCapacityBucket, RateBucket, Rate
+GlobalCapacityBucket, RateBucket, SamplingRateBucket, Rate, Interval
 from fractions import Fraction
 from dataclasses import dataclass
-from typing import Optional
 import math
 import itertools
 
@@ -35,17 +34,13 @@ class ConstantPrefetcher(RateBucket):
     def rate(self):
         return self.og_rate.value
 
-@dataclass
-class Interval:
-    tick: int
-    rate: Fraction
+@dataclass(kw_only=True)
+class PrefetchInterval(Interval):
     completed: int
     # Note that this is in-progress IOs which are not in flight and not
     # completed -- waiting to be inflight
     awaiting_dispatch: int
     inflight: int
-
-    length: Optional[int] = None
 
     too_fast_for_storage: bool = False
 
@@ -68,7 +63,7 @@ class CoolPrefetcher(RateBucket):
     multiplier = 2
 
     def __init__(self, *args, **kwargs):
-        self.ledger = [Interval(tick=0, rate=self.og_rate.value, completed=0,
+        self.ledger = [PrefetchInterval(tick=0, rate=self.og_rate.value, completed=0,
                                 awaiting_dispatch=0, inflight=0)]
         self.sample_io = None
         super().__init__(*args, **kwargs)
@@ -160,7 +155,7 @@ class CoolPrefetcher(RateBucket):
             print(ad_str + if_str + comp_str + rate_str)
 
 
-        period = Interval(tick=self.tick, rate=rate, completed=self.completed,
+        period = PrefetchInterval(tick=self.tick, rate=rate, completed=self.completed,
                           awaiting_dispatch=self.awaiting_dispatch,
                           inflight=self.inflight)
 
@@ -220,7 +215,7 @@ class CoolPrefetcher(RateBucket):
         return super().next_action()
 
 
-class PIDPrefetcher(RateBucket):
+class PIDPrefetcher(SamplingRateBucket):
     name = 'remaining'
     kp = -Rate(per_second=1000).value
     kd = -Fraction(1, 1000)
@@ -229,14 +224,10 @@ class PIDPrefetcher(RateBucket):
     og_rate = Rate(per_second=2000)
 
     def __init__(self, *args, **kwargs):
-        self.ledger = [Interval(tick=0, rate=self.og_rate.value, completed=0,
-                                awaiting_dispatch=0, inflight=0)]
-        self.sample_io = None
         super().__init__(*args, **kwargs)
-
-    @property
-    def period(self):
-        return self.ledger[-1]
+        self.ledger = [PrefetchInterval(tick=0, rate=self.og_rate.value, completed=0,
+                                awaiting_dispatch=0, inflight=0)]
+        self._rate = self.rate()
 
     def acbs(self, period):
         return period.completed - self.completed_headroom
@@ -286,87 +277,16 @@ class PIDPrefetcher(RateBucket):
         log_str += f'Rate: {float(rate)}'
         print(completed_str)
         print(log_str)
-        period = Interval(tick=self.tick, rate=rate, completed=self.completed,
+        period = PrefetchInterval(tick=self.tick, rate=rate, completed=self.completed,
                           awaiting_dispatch=0,
                           inflight=0)
 
         self.ledger.append(period)
         self.sample_io = None
 
-    def zero_rate_move(self):
-        moveable = 1
-
-        # print("ZERO RATE MOVE")
-        self.tick_data['want_to_move'] = moveable
-        self.tick_data['wait'] = moveable > len(self.source)
-        self.tick_data['rate'] = float(self.rate())
-
-        result = frozenset(itertools.islice(self.source, moveable))
-        self.volume -= len(result)
-        # print(f"volume: {self.volume}. len result: {len(result)}")
-
-        self.last_tick, self._rate = self.tick, self.rate()
-
-        return result
-
-    def to_move(self):
-        if self.rate() != 0:
-            to_move = super().to_move()
-        # if the rate is 0, even if there are more IOs, to_move will be empty
-        else:
-            to_move = self.zero_rate_move()
-
-
-        return to_move
-
-    def should_adjust(self):
-        if self.sample_io is None:
-            return False
-        if self.sample_io in self.pipeline['completed']:
-            return True
-        if self.sample_io in self.pipeline['consumed']:
-            return True
-        return False
-
-    def rate(self):
-        return self.period.rate
-
     @property
     def completed(self):
         return len(self.pipeline['completed'])
-
-    def dispatch_sample(self):
-        if len(self.source) == 0:
-            return
-        self.sample_io = self.source.pop()
-        self.target.add(self.sample_io)
-        print(f"dispatching sample_io on tick {self.tick}.")
-
-    def run(self, *args, **kwargs):
-        if self.tick == 0:
-            self.dispatch_sample()
-        elif self.should_adjust():
-            print(f'adjusting on tick {self.tick}')
-            self.adjust()
-            self.dispatch_sample()
-        super().run(*args, **kwargs)
-
-    def next_action(self):
-        # If we just adjusted, make sure that we run on the next tick so that
-        # the rate change is reflected
-        if self.period.tick == self.tick:
-            return self.tick + 1
-
-        if self.rate() != 0:
-            return super().next_action()
-
-        # If our rate is 0 and we dispatched our sample, we want to wait to
-        # move until the sample is in completed or consumed
-        if self.should_adjust():
-            return self.tick + 1
-
-        # Otherwise wait until the IO has been dispatched
-        return math.inf
 
 
 prefetcher_list = [

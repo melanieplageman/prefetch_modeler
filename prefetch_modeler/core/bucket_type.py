@@ -1,6 +1,7 @@
 import itertools
 import math
 from prefetch_modeler.core.bucket import Bucket
+from prefetch_modeler.core.units import Interval
 
 
 class GateBucket(Bucket):
@@ -107,6 +108,81 @@ class RateBucket(Bucket):
         # The next tick that an IO will be moveable
         interval = (1 - self.volume) / self._rate
         return self.tick + math.ceil(interval)
+
+
+class SamplingRateBucket(RateBucket):
+    def __init__(self, *args, **kwargs):
+        self.ledger = [Interval(tick=0, rate=0)]
+        self.sample_io = None
+        super().__init__(*args, **kwargs)
+
+    def rate(self):
+        return self.period.rate
+
+    @property
+    def period(self):
+        return self.ledger[-1]
+
+    @property
+    def maximum_volume(self):
+        if self.rate() == 0:
+            return 1
+        return math.ceil(math.ceil(self._rate) / self._rate) * self._rate
+
+    def adjust(self):
+        raise NotImplementedError()
+
+    def dispatch_sample(self):
+        if not self.source:
+            return
+        self.sample_io = self.source.pop()
+        self.target.add(self.sample_io)
+        print(f"dispatching sample_io on tick {self.tick}.")
+
+    def should_adjust(self):
+        if self.sample_io is None:
+            return False
+        if self.sample_io in self.pipeline['completed']:
+            return True
+        if self.sample_io in self.pipeline['consumed']:
+            return True
+        return False
+
+    def to_move(self):
+        # In case rate was recently set to 0, volume must be reset to 1
+        if self.rate() == 0:
+            self.volume = 1
+
+        return super().to_move()
+
+    def next_action(self):
+        # If we just adjusted, make sure that we run on the next tick so that
+        # the rate change is reflected
+        if self.period.tick == self.tick:
+            return self.tick + 1
+
+        # If our sample is completed or consumed, we should run on the next
+        # tick so that we can prefetch
+        if self.should_adjust():
+            return self.tick + 1
+
+        # If the rate is 0 and the dispatched sample is not yet completed or
+        # consumed, we have to rely on the pipeline to set a flag for us to run
+        # when the sample is moved to the completed or consumed bucket.
+        if self.rate() == 0:
+            return math.inf
+
+        # print(f"self.volume: {float(self.volume)}. max volume: {float(self.maximum_volume)}")
+        return super().next_action()
+
+    def run(self, *args, **kwargs):
+        if self.tick == 0:
+            self.dispatch_sample()
+        elif self.should_adjust():
+            print(f'adjusting on tick {self.tick}')
+            self.adjust()
+            self.dispatch_sample()
+        super().run(*args, **kwargs)
 
 
 class ThresholdBucket(Bucket):

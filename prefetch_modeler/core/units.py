@@ -1,5 +1,7 @@
 from enum import Enum, auto
 from fractions import Fraction
+from typing import Optional
+from dataclasses import dataclass
 import math
 
 class Unit(Enum):
@@ -62,4 +64,11 @@ class Rate(BaseRate):
             return f'{int(self.value * 1000)}' + extension
         if self.original_unit == Unit.SECOND:
             return f'{int(self.value * 1000 * 1000)}' + extension
+
+
+@dataclass(kw_only=True)
+class Interval:
+    tick: int
+    rate: Fraction
+    length: Optional[int] = None
 
