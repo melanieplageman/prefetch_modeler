@@ -4,7 +4,7 @@ import sys
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from prefetch_modeler.storage_type import fast_local1, slow_cloud1
+from prefetch_modeler.storage_type import fast_local1, slow_cloud1, empty_storage
 from prefetch_modeler.workload_type import even_wl, uneven_wl
 from prefetch_modeler.prefetcher_type import prefetcher_list
 from prefetch_modeler.cohort import Member, Cohort
