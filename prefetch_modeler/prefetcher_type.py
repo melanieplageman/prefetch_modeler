@@ -236,15 +236,20 @@ class PIDPrefetcher(SamplingRateBucket):
         self.period.length = self.tick - self.period.tick
         rate = self.period.rate
 
-        log_str = ''
+        log_str = f'Tick: {self.tick}. Starting Rate: {float(rate)}. '
 
         period2 = self.period
 
         position_term = Fraction(self.acbs(period2), self.period.length)
-        log_str += f'Position Term: {position_term}. '
-        completed_str = f'p2_completed: {self.acbs(period2)} p2_length: {period2.length}. '
+
+        trial_length = math.ceil(recent_mean([period.length for period in reversed(self.ledger)], take=3))
+
+        position_term = Fraction(self.acbs(period2), trial_length)
 
         rate -= position_term
+
+        log_str += f'Position Term: {position_term}. '
+        completed_str = f'p2_completed: {self.acbs(period2)}. p2_length: {period2.length}. '
 
         if len(self.ledger) > 2:
             period1 = self.ledger[-2]
@@ -272,6 +277,8 @@ class PIDPrefetcher(SamplingRateBucket):
 
             rate -= derivative_term
 
+        if not self.source:
+            rate = 0
         rate = max(0, rate)
 
         log_str += f'Rate: {float(rate)}'

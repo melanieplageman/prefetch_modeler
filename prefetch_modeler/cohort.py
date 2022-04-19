@@ -64,30 +64,41 @@ class Cohort:
 
     def dump_plots(self, storage_name, workload_name):
         xlim, xwaitlim = 0, 0
+        yratelim = 0
         for member in self.members:
             max_x = max(max(member.consumption_rate_view.index),
                         max(member.io_view.index))
             max_wait_x = max(member.wait_view.index)
+
+            max_rate_y = max(
+                max(member.consumption_rate_view.prefetch_rate),
+                max(member.consumption_rate_view.consumption_rate))
+
             xlim = max_x if max_x > xlim else xlim
             xwaitlim = max_wait_x if max_wait_x > xwaitlim else xwaitlim
+            yratelim = max_rate_y if max_rate_y > yratelim else yratelim
 
         directory = f'images/{storage_name}/{workload_name}/'
 
         for member in self.members:
-            figure, axes = plt.subplots(2)
-            figure.set_size_inches(15, 11)
-            axes[0].set_xlim([0, xlim])
-
             title_str = ", ".join(hint for i, hint in
                 sorted(bucket_type.hint() for bucket_type in member.schema if
                        bucket_type.hint() is not None)
             )
+
+            figure, axes = plt.subplots(3)
+            figure.set_size_inches(15, 11)
+
+            axes[0].set_xlim([0, xlim])
             member.io_view.plot(ax=axes[0], title=title_str)
-            member.consumption_rate_view.plot(ax=axes[0], secondary_y=True)
 
             axes[1].get_yaxis().set_visible(False)
             axes[1].set_xlim([0, xlim])
             member.wait_view.astype(int).plot.area(ax=axes[1], stacked=False)
+
+            axes[2].set_xlim([0, xlim])
+            axes[2].set_ylim([0, yratelim])
+            member.consumption_rate_view.plot(ax=axes[2])
 
             prefetcher_name = '_'.join([bucket.__name__ for bucket in member.prefetcher])
             # plt.savefig(f'{directory}/{prefetcher_name}.png')

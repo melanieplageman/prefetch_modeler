@@ -125,8 +125,8 @@ class SamplingRateBucket(RateBucket):
 
     @property
     def maximum_volume(self):
-        if self.rate() == 0:
-            return 1
+        if self._rate == 0:
+            return 0
         return math.ceil(math.ceil(self._rate) / self._rate) * self._rate
 
     def adjust(self):
@@ -149,11 +149,27 @@ class SamplingRateBucket(RateBucket):
         return False
 
     def to_move(self):
-        # In case rate was recently set to 0, volume must be reset to 1
         if self.rate() == 0:
-            self.volume = 1
+            self.volume = 0
+        else:
+            self.volume += (self.tick - self.last_tick) * self._rate
+            self.volume = min(self.volume, self.maximum_volume)
 
-        return super().to_move()
+        moveable = max(math.floor(self.volume), 0)
+
+        self.tick_data['want_to_move'] = moveable
+        self.tick_data['wait'] = moveable > len(self.source)
+
+        result = frozenset(itertools.islice(self.source, moveable))
+        self.volume -= len(result)
+
+        self.tick_data['rate'] = float(self.rate())
+
+        self.last_tick, self._rate = self.tick, self.rate()
+
+        return result
+
+
 
     def next_action(self):
         # If we just adjusted, make sure that we run on the next tick so that
