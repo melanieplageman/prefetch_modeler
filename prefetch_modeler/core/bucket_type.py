@@ -28,9 +28,9 @@ class DialBucket(Bucket):
         io.move_at = (self.tick or 0) + self.latency()
         super().add(io)
 
-    def discard(self, io):
+    def remove(self, io):
         del io.move_at
-        super().discard(io)
+        super().remove(io)
 
     def latency(self):
         """The amount of time that an IO should be retained in this bucket."""
@@ -137,7 +137,7 @@ class SamplingRateBucket(RateBucket):
     def dispatch_sample(self):
         if not self.source:
             return
-        self.sample_io = self.source.pop()
+        self.sample_io = self.popitem()
         self.target.add(self.sample_io)
         print(f"dispatching sample_io on tick {self.tick}.")
 

@@ -1,4 +1,5 @@
 import collections.abc
+from collections import OrderedDict
 import pandas as pd
 import math
 import warnings
@@ -86,12 +87,12 @@ class Pipeline:
         return self.data
 
 
-class Bucket(collections.abc.MutableSet):
+class Bucket(OrderedDict):
     def __init__(self, name, pipeline):
         self.name = name
         self.pipeline = pipeline
 
-        self.source = set()
+        self.source = OrderedDict()
         self.target = self
 
         self.counter = 0
@@ -122,10 +123,13 @@ class Bucket(collections.abc.MutableSet):
     def add(self, io):
         self.counter += 1
         io.on_add(self)
-        self.source.add(io)
+        self.source[io] = ''
 
-    def discard(self, io):
-        self.source.discard(io)
+    def remove(self, io):
+        self.source.pop(io, None)
+
+    def popitem(self):
+        return self.source.popitem(last=False)[0]
 
     @property
     def tick(self):
