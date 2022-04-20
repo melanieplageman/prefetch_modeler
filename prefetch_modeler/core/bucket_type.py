@@ -75,11 +75,16 @@ class RateBucket(Bucket):
 
     @property
     def maximum_volume(self):
+        if self._rate == 0:
+            return 0
         return math.ceil(math.ceil(self._rate) / self._rate) * self._rate
 
     def to_move(self):
-        self.volume += (self.tick - self.last_tick) * self._rate
-        self.volume = min(self.volume, self.maximum_volume)
+        if self.rate() == 0:
+            self.volume = 0
+        else:
+            self.volume += (self.tick - self.last_tick) * self._rate
+            self.volume = min(self.volume, self.maximum_volume)
 
         moveable = max(math.floor(self.volume), 0)
 
@@ -96,6 +101,9 @@ class RateBucket(Bucket):
         return result
 
     def next_action(self):
+        if self._rate == 0:
+            return math.inf
+
         if not self.source:
             if self.volume >= self.maximum_volume:
                 return math.inf
@@ -123,12 +131,6 @@ class SamplingRateBucket(RateBucket):
     def period(self):
         return self.ledger[-1]
 
-    @property
-    def maximum_volume(self):
-        if self._rate == 0:
-            return 0
-        return math.ceil(math.ceil(self._rate) / self._rate) * self._rate
-
     def adjust(self):
         raise NotImplementedError()
 
@@ -148,29 +150,6 @@ class SamplingRateBucket(RateBucket):
             return True
         return False
 
-    def to_move(self):
-        if self.rate() == 0:
-            self.volume = 0
-        else:
-            self.volume += (self.tick - self.last_tick) * self._rate
-            self.volume = min(self.volume, self.maximum_volume)
-
-        moveable = max(math.floor(self.volume), 0)
-
-        self.tick_data['want_to_move'] = moveable
-        self.tick_data['wait'] = moveable > len(self.source)
-
-        result = frozenset(itertools.islice(self.source, moveable))
-        self.volume -= len(result)
-
-        self.tick_data['rate'] = float(self.rate())
-
-        self.last_tick, self._rate = self.tick, self.rate()
-
-        return result
-
-
-
     def next_action(self):
         # If we just adjusted, make sure that we run on the next tick so that
         # the rate change is reflected
@@ -178,15 +157,13 @@ class SamplingRateBucket(RateBucket):
             return self.tick + 1
 
         # If our sample is completed or consumed, we should run on the next
-        # tick so that we can prefetch
+        # tick so that we can adjust
         if self.should_adjust():
             return self.tick + 1
 
         # If the rate is 0 and the dispatched sample is not yet completed or
         # consumed, we have to rely on the pipeline to set a flag for us to run
         # when the sample is moved to the completed or consumed bucket.
-        if self.rate() == 0:
-            return math.inf
 
         # print(f"self.volume: {float(self.volume)}. max volume: {float(self.maximum_volume)}")
         return super().next_action()
