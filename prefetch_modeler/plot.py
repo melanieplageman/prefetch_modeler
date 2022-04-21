@@ -135,22 +135,25 @@ def io_data(data):
     view = view.assign(**rename)
     return view
 
-def consumption_rate_data(data):
-    cr_view = pd.DataFrame(index=data.index)
+def rate_data(data):
+    rate_view = pd.DataFrame(index=data.index)
     cr_rename = {
         'consumption_rate': 'completed_rate',
         'prefetch_rate': 'remaining_rate',
+        # 'storage_completed_rate': 'remaining_storage_completed_rate',
     }
     cr_rename = {k: data[v] for k, v in cr_rename.items() if v in data}
-    cr_view = cr_view.assign(**cr_rename)
+    rate_view = rate_view.assign(**cr_rename)
 
-    if 'consumption_rate' in cr_view:
-        cr_view['consumption_rate'] = [value * 1000 * 1000 for value in cr_view['consumption_rate']]
-    if 'prefetch_rate' in cr_view:
-        cr_view['prefetch_rate'] = [value * 1000 * 1000 for value in cr_view['prefetch_rate']]
-    dropped_columns = [column for column in cr_view if column not in cr_rename.keys()]
-    cr_view = cr_view.drop(columns=dropped_columns)
-    return cr_view
+    if 'consumption_rate' in rate_view:
+        rate_view['consumption_rate'] = [value * 1000 * 1000 for value in rate_view['consumption_rate']]
+    if 'prefetch_rate' in rate_view:
+        rate_view['prefetch_rate'] = [value * 1000 * 1000 for value in rate_view['prefetch_rate']]
+    if 'storage_completed_rate' in rate_view:
+        rate_view['storage_completed_rate'] = [value * 1000 * 1000 for value in rate_view['storage_completed_rate']]
+    dropped_columns = [column for column in rate_view if column not in cr_rename.keys()]
+    rate_view = rate_view.drop(columns=dropped_columns)
+    return rate_view
 
 def wait_data(data):
     wait_view = pd.DataFrame(index=data.index)
