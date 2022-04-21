@@ -161,10 +161,6 @@ class SamplingRateBucket(RateBucket):
         if self.should_adjust():
             return self.tick + 1
 
-        # If the rate is 0 and the dispatched sample is not yet completed or
-        # consumed, we have to rely on the pipeline to set a flag for us to run
-        # when the sample is moved to the completed or consumed bucket.
-
         # print(f"self.volume: {float(self.volume)}. max volume: {float(self.maximum_volume)}")
         return super().next_action()
 
