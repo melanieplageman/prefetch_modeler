@@ -1,6 +1,6 @@
 from enum import Enum
 from prefetch_modeler.core import GateBucket, ContinueBucket, \
-GlobalCapacityBucket, RateBucket, SamplingRateBucket, Rate, Interval
+GlobalCapacityBucket, RateBucket, SamplingRateBucket, Rate, Interval, Duration
 from fractions import Fraction
 from dataclasses import dataclass
 import math

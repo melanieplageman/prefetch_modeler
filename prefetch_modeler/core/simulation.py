@@ -8,7 +8,7 @@ class Simulation:
         self.schema = args
 
     def run(self, volume, duration=None, traced=None):
-        traced = traced or frozenset()
+        traced = traced or OrderedDict()
         ios = [Tracer(i) if i in traced else IO() for i in range(volume)]
 
         pipeline = Pipeline(*[bucket_type(getattr(bucket_type, 'name', bucket_type.__name__), None) for bucket_type in self.schema])

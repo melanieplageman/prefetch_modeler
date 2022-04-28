@@ -111,7 +111,8 @@ def io_title(pipeline_config):
 def io_data(data):
     view = pd.DataFrame(index=data.index)
     rename = {
-        'remaining': 'remaining_num_ios',
+        # 'remaining': 'remaining_num_ios',
+        # 'done': 'consumed_num_ios',
         # 'do_sync_fetch': 'baseline_sync_to_move',
         # 'do_fetch_all': 'baseline_all_to_move',
         # 'do_prefetch': 'remaining_to_move',
@@ -124,9 +125,10 @@ def io_data(data):
         # 'inflight': 'inflight_num_ios',
         # 'do_complete': 'inflight_to_move',
         'completed_not_consumed': 'completed_num_ios',
-        # 'awaiting_dispatch': 'remaining_awaiting_dispatch',
+        'awaiting_dispatch': 'remaining_awaiting_dispatch',
+        'cnc_headroom': 'remaining_cnc_headroom',
+        'aw_headroom': 'remaining_aw_headroom',
         # 'do_consume': 'completed_to_move',
-        'done': 'consumed_num_ios',
         # 'completion_target_distance': 'remaining_completion_target_distance',
         # 'min_dispatch': 'remaining_min_dispatch',
         # 'consumption_rate': 'completed_rate',
@@ -140,6 +142,7 @@ def rate_data(data):
     cr_rename = {
         'consumption_rate': 'completed_rate',
         'prefetch_rate': 'remaining_rate',
+        # 'demand_rate': 'remaining_demand_rate',
         # 'storage_completed_rate': 'remaining_storage_completed_rate',
     }
     cr_rename = {k: data[v] for k, v in cr_rename.items() if v in data}
@@ -151,9 +154,28 @@ def rate_data(data):
         rate_view['prefetch_rate'] = [value * 1000 * 1000 for value in rate_view['prefetch_rate']]
     if 'storage_completed_rate' in rate_view:
         rate_view['storage_completed_rate'] = [value * 1000 * 1000 for value in rate_view['storage_completed_rate']]
+    if 'demand_rate' in rate_view:
+        rate_view['demand_rate'] = [value * 1000 * 1000 for value in rate_view['demand_rate']]
     dropped_columns = [column for column in rate_view if column not in cr_rename.keys()]
     rate_view = rate_view.drop(columns=dropped_columns)
     return rate_view
+
+def pid_data(data):
+    pid_view = pd.DataFrame(index=data.index)
+    cr_rename = {
+        'derivative_term': 'remaining_derivative_term',
+        'proportional_term': 'remaining_proportional_term',
+        'integral_term': 'remaining_integral_term',
+        'integral_term_w_coefficient': 'remaining_integral_term_w_coefficient',
+        'proportional_term_w_coefficient': 'remaining_proportional_term_w_coefficient',
+        'derivative_term_w_coefficient': 'remaining_derivative_term_w_coefficient',
+    }
+
+    cr_rename = {k: data[v] for k, v in cr_rename.items() if v in data}
+    pid_view = pid_view.assign(**cr_rename)
+    dropped_columns = [column for column in pid_view if column not in cr_rename.keys()]
+    pid_view = pid_view.drop(columns=dropped_columns)
+    return pid_view
 
 def wait_data(data):
     wait_view = pd.DataFrame(index=data.index)
