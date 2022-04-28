@@ -23,3 +23,6 @@ cohort1 = Cohort()
 
 cohort1.run(fast_local1, uneven_wl, prefetcher_list)
 cohort1.dump_plots(storage_name='fast_local1', workload_name='uneven_wl')
+
+# cohort1.run(empty_storage, uneven_wl, prefetcher_list)
+# cohort1.dump_plots(storage_name='empty_storage', workload_name='uneven_wl')

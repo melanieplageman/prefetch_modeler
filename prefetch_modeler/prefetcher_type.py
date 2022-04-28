@@ -13,9 +13,51 @@ class BaselineSync(GlobalCapacityBucket):
     def max_buffers(self):
         return 1
 
+    def to_move(self):
+        self.tick_data['awaiting_dispatch'] = self.awaiting_dispatch
+        return super().to_move()
+
+    @property
+    def completed(self):
+        return len(self.pipeline['completed'])
+
+    @property
+    def in_progress(self):
+        return self.counter - len(self.pipeline['consumed'])
+
+    @property
+    def awaiting_dispatch(self):
+        return self.in_progress - self.inflight - self.completed - len(self)
+
+    @property
+    def inflight(self):
+        return len(self.pipeline['inflight'])
+
+
 
 class BaselineFetchAll(ContinueBucket):
     name = 'remaining'
+
+    def to_move(self):
+        self.tick_data['awaiting_dispatch'] = self.awaiting_dispatch
+        return super().to_move()
+
+    @property
+    def completed(self):
+        return len(self.pipeline['completed'])
+
+    @property
+    def in_progress(self):
+        return self.counter - len(self.pipeline['consumed'])
+
+    @property
+    def awaiting_dispatch(self):
+        return self.in_progress - self.inflight - self.completed - len(self)
+
+    @property
+    def inflight(self):
+        return len(self.pipeline['inflight'])
+
 
 class PeriodRate:
     def __init__(self, rate, required_correction):
@@ -41,9 +83,8 @@ class PrefetchInterval(Interval):
     # completed -- waiting to be inflight
     awaiting_dispatch: int
     inflight: int
-
-    too_fast_for_storage: bool = False
-
+    lt_demanded: int
+    lt_completed: int
 
 def recent_mean(iterator, take=8):
     numerator = denominator = 0
@@ -54,136 +95,33 @@ def recent_mean(iterator, take=8):
     return numerator / denominator
 
 
-class CoolPrefetcher(RateBucket):
+class SamplingPrefetcher(SamplingRateBucket):
     name = 'remaining'
 
     og_rate = Rate(per_second=2000)
-    completed_headroom = 10
-    awaiting_dispatch_headroom = 4
-    multiplier = 2
 
     def __init__(self, *args, **kwargs):
-        self.ledger = [PrefetchInterval(tick=0, rate=self.og_rate.value, completed=0,
-                                awaiting_dispatch=0, inflight=0)]
-        self.sample_io = None
         super().__init__(*args, **kwargs)
-
-    @classmethod
-    def hint(cls):
-        return (2, f"Starting Prefetch Rate: {cls.og_rate}")
-
-    def next_rate_up(self, rate, dt, backlog, headroom):
-        next_rate = rate - dt
-        if next_rate < rate * self.multiplier:
-            next_rate = rate * self.multiplier
-
-        next_rate -= self.burn_down_rate(backlog, headroom)
-        if next_rate < rate:
-            return rate
-        return next_rate
-
-    def next_rate_down(self, rate, dt, backlog, headroom):
-        next_rate = rate - dt - self.burn_down_rate(backlog, headroom)
-
-        if next_rate < rate / self.multiplier:
-            next_rate = rate / self.multiplier
-        return next_rate
-
-    def burn_down_rate(self, backlog, headroom):
-        # How long will the next period be? Let's use a recency biased mean of
-        # the last periods
-        next_period_length = recent_mean(period.length for period in reversed(self.ledger))
-
-        # How many completed IOs do we want to burn down?
-        burn_down = backlog - headroom
-
-        if burn_down <= 0:
-            return 0
-
-        return Fraction.from_float(burn_down / next_period_length)
-
-    def adjust(self):
-        self.period.length = self.tick - self.period.tick
-        rate = self.period.rate
-
-        if len(self.ledger) > 2:
-            completed_dt = Fraction(self.completed - self.period.completed,
-                                    self.period.length)
-
-            awaiting_dispatch_dt = Fraction(self.awaiting_dispatch - self.period.awaiting_dispatch,
-                                            self.period.length)
-
-            old_rate = self.ledger[-2].rate
-
-            print(f"completed_dt: {completed_dt}. awaiting_dispatch_dt: {awaiting_dispatch_dt}")
-            if completed_dt > 0 or self.completed > self.completed_headroom:
-                rate = self.next_rate_down(old_rate, completed_dt,
-                                           self.completed,
-                                           self.completed_headroom)
-
-            elif awaiting_dispatch_dt > 0 or self.awaiting_dispatch > self.awaiting_dispatch_headroom:
-                rate = self.next_rate_down(old_rate, awaiting_dispatch_dt,
-                                           self.awaiting_dispatch,
-                                           self.awaiting_dispatch_headroom)
-                self.ledger[-2].too_fast_for_storage = True
-
-            else:
-                too_fast_rates = [period.rate for period in
-                                  reversed(self.ledger) if
-                                  period.too_fast_for_storage]
-                if too_fast_rates:
-                    too_fast_rate = recent_mean(too_fast_rates)
-                else:
-                    too_fast_rate = None
-
-                if too_fast_rate is not None and old_rate > too_fast_rate:
-                    rate = (old_rate + too_fast_rate) / 2
-                else:
-                    rate = self.next_rate_up(old_rate, completed_dt,
-                                            self.completed,
-                                            self.completed_headroom)
-
-
-        if rate != self.period.rate:
-            previous_ad = self.ledger[-1].awaiting_dispatch
-            previous_comp = self.ledger[-1].completed
-            previous_if = self.ledger[-1].inflight
-            ad_str = f"awaiting_dispatch: {previous_ad}, {self.awaiting_dispatch}. "
-            if_str = f"inflight: {previous_if}, {self.inflight}. "
-            comp_str = f"completed: {previous_comp}, {self.completed}. "
-            rate_str = f"old_rate: {self.period.rate}, new_rate: {rate}. "
-            print(ad_str + if_str + comp_str + rate_str)
-
-
-        period = PrefetchInterval(tick=self.tick, rate=rate, completed=self.completed,
-                          awaiting_dispatch=self.awaiting_dispatch,
-                          inflight=self.inflight)
-
-        self.ledger.append(period)
-        self.sample_io = None
+        self.ledger = [PrefetchInterval(tick=0, rate=self.og_rate.value, completed=0,
+                                awaiting_dispatch=0, inflight=0,
+                                        lt_demanded=0, lt_completed=0)]
+        self._rate = self.rate()
+        print(f"Initial Rate: {self._rate} {float(self._rate)}")
 
     def to_move(self):
+        return super().to_move()
+
+    def log_to_move(self):
         self.tick_data['awaiting_dispatch'] = self.awaiting_dispatch
-        to_move = super().to_move()
-        if self.sample_io is None:
-            self.sample_io = next(iter(to_move), None)
-        return to_move
+        self.tick_data['demand_rate'] = float(self.demand_rate)
+        self.tick_data['storage_completed_rate'] = float(self.storage_complete_rate)
 
-    def should_adjust(self):
-        if self.sample_io is None:
-            return False
-        if self.sample_io in self.pipeline['completed']:
-            return True
-        if self.sample_io in self.pipeline['consumed']:
-            return True
-        return False
-
-    def rate(self):
-        return self.period.rate
+    def adjust(self):
+        pass
 
     @property
-    def period(self):
-        return self.ledger[-1]
+    def completed(self):
+        return len(self.pipeline['completed'])
 
     @property
     def in_progress(self):
@@ -198,39 +136,216 @@ class CoolPrefetcher(RateBucket):
         return len(self.pipeline['inflight'])
 
     @property
-    def completed(self):
-        return len(self.pipeline['completed'])
+    def lifetime_demands(self):
+        return self.pipeline['completed'].demanded
 
-    def run(self, *args, **kwargs):
-        if self.should_adjust():
-            print(f'adjusting on tick {self.tick}')
-            self.adjust()
-        super().run(*args, **kwargs)
+    @property
+    def lifetime_completes(self):
+        return self.pipeline['completed'].counter
 
-    def next_action(self):
-        # If we just adjusted, make sure that we run on the next tick so that
-        # the rate change is reflected
-        if self.period.tick == self.tick:
-            return self.tick + 1
-        return super().next_action()
+    @property
+    def demand_rate(self):
+        if len(self.ledger) < 2:
+            return 0
+
+        period2 = self.ledger[-1]
+        period1 = self.ledger[-2]
+        return Fraction(period2.lt_demanded - period1.lt_demanded, period2.length)
+
+    @property
+    def storage_complete_rate(self):
+        if len(self.ledger) < 2:
+            return 0
+
+        period2 = self.ledger[-1]
+        period1 = self.ledger[-2]
+        return Fraction(period2.lt_completed - period1.lt_completed, period2.length)
 
 
-class PIDPrefetcher(SamplingRateBucket):
-    name = 'remaining'
-    kp = -Rate(per_second=1000).value
-    kd = -Fraction(1, 1000)
-    ki = -Rate(per_second=1000).value
-    completed_headroom = 10
+@dataclass(kw_only=True)
+class PIDPrefetchInterval(PrefetchInterval):
+    integral_term: int
+    proportional_term: Fraction
+    derivative_term: Fraction
+    cnc_headroom: int
+
+
+class PIDPrefetcher(SamplingPrefetcher):
+    ki = -Rate(per_second=40).value       # should be in units of per-second
+    kp = -0.9                               # should be dimensionless
+    kd = -Duration(microseconds=2).total  # should be in units of seconds
+    cnc_headroom = 6
+    aw_headroom = 2
     og_rate = Rate(per_second=2000)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.ledger = [PrefetchInterval(tick=0, rate=self.og_rate.value, completed=0,
-                                awaiting_dispatch=0, inflight=0)]
-        self._rate = self.rate()
 
-    def acbs(self, period):
-        return period.completed - self.completed_headroom
+        self.ledger = [PIDPrefetchInterval(tick=0, rate=self.og_rate.value, completed=0,
+                                awaiting_dispatch=0, inflight=0,
+                                           cnc_headroom=self.cnc_headroom,
+                                  proportional_term=0,
+                                  integral_term=0,
+                                  derivative_term=0,
+                                        lt_demanded=0, lt_completed=0)]
+
+    def log_to_move(self):
+        super().log_to_move()
+        self.tick_data['integral_term_w_coefficient'] = float(self.period.integral_term * self.ki)
+        self.tick_data['integral_term'] = float(self.period.integral_term)
+        self.tick_data['derivative_term_w_coefficient'] = float(self.period.derivative_term * self.kd)
+        self.tick_data['derivative_term'] = float(self.period.derivative_term)
+        self.tick_data['proportional_term_w_coefficient'] = float(self.period.proportional_term * self.kp)
+        self.tick_data['proportional_term'] = float(self.period.proportional_term)
+        self.tick_data['cnc_headroom'] = self.cnc_headroom
+        self.tick_data['aw_headroom'] = self.aw_headroom
+
+    def to_move(self):
+        return super().to_move()
+
+    def adj_awd(self, period):
+        return period.awaiting_dispatch - self.aw_headroom
+
+    def adj_cnc(self, period):
+        return period.completed - self.cnc_headroom
+
+    def change_cnc_rate(self, period0, period1):
+        return Fraction(self.adj_cnc(period1) - self.adj_cnc(period0), period1.length)
+
+    def change_change_cnc_rate(self, period0, period1, period2):
+        cdt_p1 = self.change_cnc_rate(period0, period1)
+        cdt_p2 = self.change_cnc_rate(period1, period2)
+
+        return Fraction(cdt_p2 - cdt_p1, period2.length + period1.length)
+
+    @property
+    def integral_term(self):
+        return self.adj_cnc(self.period)
+
+    @property
+    def proportional_term(self):
+        if len(self.ledger) < 2:
+            return 0
+
+        period2 = self.ledger[-1]
+        period1 = self.ledger[-2]
+        return self.change_cnc_rate(period1, period2)
+
+    @property
+    def derivative_term(self):
+        if len(self.ledger) < 3:
+            return 0
+
+        period2 = self.ledger[-1]
+        period1 = self.ledger[-2]
+        period0 = self.ledger[-3]
+        return self.change_change_cnc_rate(period0, period1, period2)
+
+    @property
+    def completed_log(self):
+        log_str = f'{self.tick}: '
+
+        if len(self.ledger) < 1:
+            return log_str
+
+        period2 = self.ledger[-1]
+        log_str += f'p2_completed: {self.adj_cnc(period2)}. p2_length: {period2.length}. '
+
+        if len(self.ledger) < 2:
+            return log_str
+
+        period1 = self.ledger[-2]
+        log_str += f'p1_completed: {self.adj_cnc(period1)}. p1_length: {period1.length}. '
+
+        if len(self.ledger) < 3:
+            return log_str
+
+        period0 = self.ledger[-3]
+        log_str += f'p0_completed: {self.adj_cnc(period0)}. p0_length: {period0.length}. '
+
+        return log_str
+
+    @property
+    def awd_log(self):
+        log_str = f'{self.tick}: '
+
+        if len(self.ledger) < 1:
+            return log_str
+
+        period2 = self.ledger[-1]
+        p2_log_str = f'p2_awaiting_dispatch: {self.adj_awd(period2)}. p2_length: {period2.length}. '
+
+        if len(self.ledger) < 2:
+            return log_str + p2_log_str
+
+        period1 = self.ledger[-2]
+        p1_log_str = f'p1_awaiting_dispatch: {self.adj_awd(period1)}. p1_length: {period1.length}. '
+
+        if len(self.ledger) < 3:
+            return log_str + p1_log_str + p2_log_str
+
+        period0 = self.ledger[-3]
+        p0_log_str = f'p0_awaiting_dispatch: {self.adj_awd(period0)}. p2_length: {period0.length}. '
+
+        return log_str + p0_log_str + p1_log_str + p2_log_str
+
+    def adjust(self):
+        pass
+
+
+class FastPIDPrefetcher(PIDPrefetcher):
+    ki = -Rate(per_second=40).value       # should be in units of per-second
+    kp = -0.9                               # should be dimensionless
+    kd = -Duration(microseconds=2).total  # should be in units of seconds
+    cnc_headroom = 6
+    aw_headroom = 2
+    og_rate = Rate(per_second=2000)
+
+    @property
+    def integral_term(self):
+        return self.adj_cnc(self.period)
+
+    @property
+    def proportional_term(self):
+        if len(self.ledger) < 2:
+            return 0
+
+        period2 = self.ledger[-1]
+        period1 = self.ledger[-2]
+        return self.change_cnc_rate(period1, period2)
+
+    @property
+    def derivative_term(self):
+        if len(self.ledger) < 3:
+            return 0
+
+        period2 = self.ledger[-1]
+        period1 = self.ledger[-2]
+        period0 = self.ledger[-3]
+        return self.change_change_cnc_rate(period0, period1, period2)
+
+    @property
+    def pid_log(self):
+        log_str = f'{self.tick}: '
+
+        if len(self.ledger) < 1:
+            return log_str
+
+        log_str += f'P: {float(self.proportional_term)}. I: {float(self.integral_term)}. D: {float(self.derivative_term)}.'
+        return log_str
+
+    def to_move(self):
+        self.log_to_move()
+
+        if self.rate() == 0 and self.sample_io is None and len(self.source):
+            self.sample_io = next(iter(self.source))
+            return frozenset([self.sample_io])
+
+        to_move = super().to_move()
+        if self.sample_io is None:
+            self.sample_io = next(iter(to_move), None)
+        return to_move
+
 
     def adjust(self):
         self.period.length = self.tick - self.period.tick
@@ -238,69 +353,194 @@ class PIDPrefetcher(SamplingRateBucket):
 
         log_str = f'Tick: {self.tick}. Starting Rate: {float(rate)}. '
 
-        period2 = self.period
+        integral_term = self.integral_term * self.ki
+        proportional_term = self.proportional_term * self.kp
+        derivative_term = self.derivative_term * self.kd
 
-        position_term = Fraction(self.acbs(period2), self.period.length)
+        rate += integral_term + proportional_term + derivative_term
 
-        trial_length = math.ceil(recent_mean([period.length for period in reversed(self.ledger)], take=3))
-
-        position_term = Fraction(self.acbs(period2), trial_length)
-
-        rate -= position_term
-
-        log_str += f'Position Term: {position_term}. '
-        completed_str = f'p2_completed: {self.acbs(period2)}. p2_length: {period2.length}. '
-
-        if len(self.ledger) > 2:
-            period1 = self.ledger[-2]
-            completed_p2 = self.acbs(period2)
-            completed_p1 = self.acbs(period1)
-
-            completed_str += f"p1_completed: {completed_p1}. p1_length: {period1.length}. "
-            cdt_p2 = Fraction(self.acbs(period2) - self.acbs(period1), period2.length)
-
-            velocity_term = cdt_p2
-            log_str += f'Velocity Term: {velocity_term}. '
-
-            rate -= velocity_term
-
-        if len(self.ledger) > 3:
-            period0 = self.ledger[-3]
-
-            cdt_p1 = Fraction(self.acbs(period1) - self.acbs(period0), period1.length)
-
-            cdt_dt = Fraction(cdt_p2 - cdt_p1, period2.length + period1.length)
-
-            derivative_term = cdt_dt
-            log_str += f'Derivative Term: {derivative_term}. '
-            completed_str += f"p0_completed: {self.acbs(period0)}. p0_length: {period0.length}. "
-
-            rate -= derivative_term
-
-        if not self.source:
+        if rate < 0:
             rate = 0
-        rate = max(0, rate)
 
-        log_str += f'Rate: {float(rate)}'
-        print(completed_str)
+        log_str += f'Rate: {float(rate)}. '
         print(log_str)
-        period = PrefetchInterval(tick=self.tick, rate=rate, completed=self.completed,
-                          awaiting_dispatch=0,
-                          inflight=0)
+        print(self.pid_log)
+        print(self.completed_log)
+        period = PIDPrefetchInterval(tick=self.tick, rate=rate, completed=self.completed,
+                                  awaiting_dispatch=self.awaiting_dispatch,
+                                  inflight=self.inflight,
+                                     cnc_headroom=self.cnc_headroom,
+                                  proportional_term=self.proportional_term,
+                                  integral_term=self.integral_term,
+                                  derivative_term=self.derivative_term,
+                                  lt_demanded=self.lifetime_demands,
+                                  lt_completed=self.lifetime_completes)
 
         self.ledger.append(period)
         self.sample_io = None
 
+
+class SlowPIDPrefetcher(PIDPrefetcher):
+    ki = -Rate(per_second=100).value       # should be in units of per-second
+    kp = -0.9                               # should be dimensionless
+    kd = -Duration(microseconds=2).total  # should be in units of seconds
+    cnc_headroom = 6
+    aw_headroom = 2
+    og_rate = Rate(per_second=8000)
+
+    def change_awd_rate(self, period0, period1):
+        return Fraction(self.adj_awd(period1) - self.adj_awd(period0), period1.length)
+
     @property
-    def completed(self):
-        return len(self.pipeline['completed'])
+    def integral_term(self):
+        return self.adj_awd(self.period)
+
+    @property
+    def proportional_term(self):
+        if len(self.ledger) < 2:
+            return 0
+
+        # length = (self.ledger[-1].length + self.ledger[-2].length) / 2
+        # length = Fraction.from_float(length)
+        # return Fraction(
+        #     self.adj_awd(self.ledger[-1]) - self.adj_awd(self.ledger[-2]),
+        #     length)
+
+        change = self.adj_awd(self.ledger[-1]) - self.adj_awd(self.ledger[-2])
+        length = self.ledger[-1].length
+        return change / length
+        import math
+        return math.sqrt((change * change) / (length * length))
+
+    @property
+    def derivative_term(self):
+        if len(self.ledger) < 3:
+            return 0
+
+        period2 = self.ledger[-1]
+        period1 = self.ledger[-2]
+        period0 = self.ledger[-3]
+        awdt_p1 = self.change_awd_rate(period0, period1)
+        awdt_p2 = self.change_awd_rate(period1, period2)
+        return Fraction(awdt_p2 - awdt_p1, period2.length + period1.length)
+
+    @property
+    def pid_log(self):
+        log_str = ''
+
+        if len(self.ledger) < 1:
+            return log_str
+
+        log_str += f'P: {float(self.proportional_term * self.kp)}. I: {float(self.integral_term * self.ki)}. D: {float(self.derivative_term * self.kd)}.'
+        return log_str
+
+    def to_move(self):
+        self.tick_data['awaiting_dispatch'] = self.awaiting_dispatch
+        self.tick_data['demand_rate'] = float(self.demand_rate)
+        self.tick_data['storage_completed_rate'] = float(self.storage_complete_rate)
+        self.log_to_move()
+
+        if self.sample_io is not None:
+            return super().to_move()
+
+        submitted = self.pipeline['submitted']
+        submitted_ios = list(submitted.source.items())
+
+        if len(submitted_ios) == 0:
+
+            if self.rate() == 0 and len(self.source):
+                self.sample_io = next(iter(self.source))
+                return frozenset([self.sample_io])
+
+            to_move = super().to_move()
+            self.sample_io = next(iter(to_move), None)
+            return to_move
+
+        else:
+            self.sample_io = submitted_ios[0][0]
+            if self.rate() == 0 and len(self.source):
+                return frozenset([self.sample_io])
+            return super().to_move()
+
+
+    def adjust(self):
+        self.period.length = self.tick - self.period.tick
+        rate = self.period.rate
+
+        log_str = f'Tick: {self.tick}. Starting Rate: {float(rate)}. '
+
+        integral_term = self.integral_term * self.ki
+        proportional_term = self.proportional_term * self.kp
+        derivative_term = self.derivative_term * self.kd
+
+        if self.adj_awd(self.period) > self.aw_headroom * 2:
+            proportional_term = 0
+
+        rate += integral_term + proportional_term + derivative_term
+
+        if rate < 0:
+            rate = 0
+
+        log_str += f'Rate: {float(rate)}. '
+        print(log_str)
+        print(self.pid_log)
+        print(self.awd_log)
+        period = PIDPrefetchInterval(tick=self.tick, rate=rate, completed=self.completed,
+                                  awaiting_dispatch=self.awaiting_dispatch,
+                                  inflight=self.inflight,
+                                     cnc_headroom=self.cnc_headroom,
+                                  proportional_term=self.proportional_term,
+                                  integral_term=self.integral_term,
+                                  derivative_term=self.derivative_term,
+                                  lt_demanded=self.lifetime_demands,
+                                  lt_completed=self.lifetime_completes)
+
+        self.ledger.append(period)
+        self.sample_io = None
+
+
+class PIDPrefetcher2(FastPIDPrefetcher):
+    ki = -Rate(per_second=20).value       # should be in units of per-second
+    kp = -0.3                               # should be dimensionless
+    kd = -Duration(microseconds=2).total  # should be in units of seconds
+    og_rate = Rate(per_second=2000)
+
+class PIDPrefetcher2(FastPIDPrefetcher):
+    cnc_headroom = 16
+    ki = -Rate(per_second=50).value
+    kp = -0.6
+    kd = -Duration(microseconds=20).total
+    og_rate = Rate(per_second=2000)
+
+class PIDPrefetcher3(FastPIDPrefetcher):
+    cnc_headroom = 100
+    ki = -Rate(per_second=20).value
+    kp = -0.3
+    kd = -Duration(microseconds=2).total
+    og_rate = Rate(per_second=8000)
+
+class PIDPrefetcher4(SlowPIDPrefetcher):
+    ki = -Rate(per_second=2000).value
+    kp = -0.9
+    kd = -Duration(microseconds=10).total
+    og_rate = Rate(per_second=8000)
+
+class PIDPrefetcher1(SlowPIDPrefetcher):
+    aw_headroom = 8
+    ki = -Rate(per_second=10).value
+    kp = -0.8
+    kd = -Duration(microseconds=2).total
+    og_rate = Rate(per_second=400)
 
 
 prefetcher_list = [
-    # [BaselineFetchAll],
+    [BaselineFetchAll],
     # [BaselineSync],
     # [CoolPrefetcher],
-    [PIDPrefetcher],
+    [PIDPrefetcher3],
+    # [PIDPrefetcher2],
+    # [PIDPrefetcher1],
+    # [SimpleSamplingPrefetcher5],
     # [ConstantPrefetcher],
     # [AdjustedPrefetcher2],
 ]
