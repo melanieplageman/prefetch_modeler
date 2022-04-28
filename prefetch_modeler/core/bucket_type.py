@@ -67,6 +67,7 @@ class RateBucket(Bucket):
         self._rate = self.rate()
         self.volume = self.maximum_volume
         self.last_tick = 0
+        self.demanded = 0
         super().__init__(*args, **kwargs)
 
     def rate(self):
@@ -87,6 +88,8 @@ class RateBucket(Bucket):
             self.volume = min(self.volume, self.maximum_volume)
 
         moveable = max(math.floor(self.volume), 0)
+
+        self.demanded += moveable
 
         self.tick_data['want_to_move'] = moveable
         self.tick_data['wait'] = moveable > len(self.source)
@@ -134,13 +137,6 @@ class SamplingRateBucket(RateBucket):
     def adjust(self):
         raise NotImplementedError()
 
-    def dispatch_sample(self):
-        if not self.source:
-            return
-        self.sample_io = self.popitem()
-        self.target.add(self.sample_io)
-        print(f"dispatching sample_io on tick {self.tick}.")
-
     def should_adjust(self):
         if self.sample_io is None:
             return False
@@ -165,12 +161,8 @@ class SamplingRateBucket(RateBucket):
         return super().next_action()
 
     def run(self, *args, **kwargs):
-        if self.tick == 0:
-            self.dispatch_sample()
-        elif self.should_adjust():
-            print(f'adjusting on tick {self.tick}')
+        if self.should_adjust():
             self.adjust()
-            self.dispatch_sample()
         super().run(*args, **kwargs)
 
 
