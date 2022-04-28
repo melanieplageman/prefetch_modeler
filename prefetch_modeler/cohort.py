@@ -153,20 +153,26 @@ class Cohort:
             axes[3].set_xlim([0, xlim])
             axes[3].set_ylim([ypid_integral_lowerlim, ypid_integral_upperlim])
 
-            member.pid_view.plot(y=['integral_term'], ax=axes[3])
-            member.pid_view.plot(y=['integral_term_w_coefficient'], ax=axes[3])
+            if 'integral_term' in member.pid_view.columns:
+                member.pid_view.plot(y=['integral_term'], ax=axes[3])
+            if 'integral_term_w_coefficient' in member.pid_view.columns:
+                member.pid_view.plot(y=['integral_term_w_coefficient'], ax=axes[3])
 
             axes[4].set_xlim([0, xlim])
             axes[4].set_ylim([ypid_derivative_lowerlim, ypid_derivative_upperlim])
 
-            member.pid_view.plot(y=['derivative_term'], ax=axes[4])
-            member.pid_view.plot(y=['derivative_term_w_coefficient'], ax=axes[4])
+            if 'derivative_term' in member.pid_view.columns:
+                member.pid_view.plot(y=['derivative_term'], ax=axes[4])
+            if 'derivative_term_w_coefficient' in member.pid_view.columns:
+                member.pid_view.plot(y=['derivative_term_w_coefficient'], ax=axes[4])
 
             axes[5].set_xlim([0, xlim])
             axes[5].set_ylim([ypid_proportional_lowerlim, ypid_proportional_upperlim])
 
-            member.pid_view.plot(y=['proportional_term'], ax=axes[5])
-            member.pid_view.plot(y=['proportional_term_w_coefficient'], ax=axes[5])
+            if 'proportional_term' in member.pid_view.columns:
+                member.pid_view.plot(y=['proportional_term'], ax=axes[5])
+            if 'proportional_term_w_coefficient' in member.pid_view.columns:
+                member.pid_view.plot(y=['proportional_term_w_coefficient'], ax=axes[5])
 
             plt.savefig(f'{directory}/{prefetcher_name}.png')
             # plt.show()
