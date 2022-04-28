@@ -1,6 +1,6 @@
 from prefetch_modeler.storage_type import fast_local1, slow_cloud1
 from prefetch_modeler.core import Duration, Rate, Simulation
-from prefetch_modeler.plot import io_data, wait_data, rate_data
+from prefetch_modeler.plot import io_data, wait_data, rate_data, pid_data
 import matplotlib.pyplot as plt
 
 class Member:
@@ -10,6 +10,7 @@ class Member:
         self._wait_view = None
         self._io_view = None
         self._rate_view = None
+        self._pid_view = None
         self.storage = storage
         self.workload = workload
         self.prefetcher = prefetcher
@@ -19,7 +20,7 @@ class Member:
         simulation = Simulation(*self.prefetcher, *self.storage, *self.workload)
         self.schema = simulation.schema
 
-        result = simulation.run(500, duration=Duration(seconds=20), traced=[1, 5, 100])
+        result = simulation.run(1000, duration=Duration(seconds=20), traced=[1, 5, 100])
         data = result.bucket_data
         self.data = data.reindex(data.index.union(data.index[1:] - 1), method='ffill')
         self.tracer_data = result.tracer_data
@@ -37,6 +38,12 @@ class Member:
         return self._rate_view
 
     @property
+    def pid_view(self):
+        if self._pid_view is None:
+            self._pid_view = pid_data(self.data)
+        return self._pid_view
+
+    @property
     def io_view(self):
         if self._io_view is None:
             self._io_view = io_data(self.data)
@@ -46,6 +53,26 @@ class Member:
     def tracer_view(self):
         return self.tracer_data
 
+
+def calc_upper_ylim(df, columns, current_ylim):
+    max_y = 0
+    for column in columns:
+        if column not in df.columns:
+            continue
+        column_max_y = max(df[column])
+        max_y = column_max_y if column_max_y > max_y else max_y
+
+    return max_y if max_y > current_ylim else current_ylim
+
+def calc_lower_ylim(df, columns, current_ylim):
+    min_y = 0
+    for column in columns:
+        if column not in df.columns:
+            continue
+        column_min_y = min(df[column])
+        min_y = column_min_y if column_min_y < min_y else min_y
+
+    return min_y if min_y < current_ylim else current_ylim
 
 class Cohort:
     """
@@ -63,35 +90,51 @@ class Cohort:
             member.run()
 
     def dump_plots(self, storage_name, workload_name):
-        xlim, xwaitlim = 0, 0
-        yratelim = 0
+        xlim = 0
+        yiolim, yratelim = 0, 0
+        ypid_integral_lowerlim, ypid_integral_upperlim = 0, 0
+        ypid_proportional_lowerlim, ypid_proportional_upperlim = 0, 0
+        ypid_derivative_lowerlim, ypid_derivative_upperlim = 0, 0
         for member in self.members:
             max_x = max(max(member.rate_view.index),
+                        max(member.pid_view.index),
                         max(member.io_view.index))
-            max_wait_x = max(member.wait_view.index)
-
-            max_rate_y = max(
-                max(member.rate_view.prefetch_rate),
-                max(member.rate_view.consumption_rate)
-                # max(member.rate_view.storage_completed_rate)
-            )
-
             xlim = max_x if max_x > xlim else xlim
-            xwaitlim = max_wait_x if max_wait_x > xwaitlim else xwaitlim
-            yratelim = max_rate_y if max_rate_y > yratelim else yratelim
+
+            yiolim = calc_upper_ylim(member.io_view, member.io_view.columns, yiolim)
+
+            yratelim = calc_upper_ylim(member.rate_view,
+                                       member.rate_view.columns, yratelim)
+
+            columns = ['integral_term', 'integral_term_w_coefficient']
+            ypid_integral_upperlim = calc_upper_ylim(member.pid_view, columns, ypid_integral_upperlim)
+            ypid_integral_lowerlim = calc_lower_ylim(member.pid_view, columns, ypid_integral_lowerlim)
+
+            columns = ['derivative_term', 'derivative_term_w_coefficient']
+            ypid_derivative_upperlim = calc_upper_ylim(member.pid_view, columns, ypid_derivative_upperlim)
+            ypid_derivative_lowerlim = calc_lower_ylim(member.pid_view, columns, ypid_derivative_lowerlim)
+
+            columns = ['proportional_term', 'proportional_term_w_coefficient']
+            ypid_proportional_upperlim = calc_upper_ylim(member.pid_view, columns, ypid_proportional_upperlim)
+            ypid_proportional_lowerlim = calc_lower_ylim(member.pid_view, columns, ypid_proportional_lowerlim)
 
         directory = f'images/{storage_name}/{workload_name}/'
 
+        ypid_integral_upperlim *= 1.1
+        ypid_derivative_upperlim *= 1.1
+        ypid_proportional_upperlim *= 1.1
+        yratelim *= 1.05
         for member in self.members:
             title_str = ", ".join(hint for i, hint in
                 sorted(bucket_type.hint() for bucket_type in member.schema if
                        bucket_type.hint() is not None)
             )
 
-            figure, axes = plt.subplots(3)
-            figure.set_size_inches(15, 11)
+            figure, axes = plt.subplots(6)
+            figure.set_size_inches(15, 25)
 
             axes[0].set_xlim([0, xlim])
+            axes[0].set_ylim([0, yiolim])
             member.io_view.plot(ax=axes[0], title=title_str)
 
             axes[1].get_yaxis().set_visible(False)
@@ -103,8 +146,30 @@ class Cohort:
             member.rate_view.plot(ax=axes[2])
 
             prefetcher_name = '_'.join([bucket.__name__ for bucket in member.prefetcher])
-            # plt.savefig(f'{directory}/{prefetcher_name}.png')
-            plt.show()
+            if prefetcher_name in ['BaselineFetchAll', 'BaselineSync']:
+                plt.savefig(f'{directory}/{prefetcher_name}.png')
+                continue
+
+            axes[3].set_xlim([0, xlim])
+            axes[3].set_ylim([ypid_integral_lowerlim, ypid_integral_upperlim])
+
+            member.pid_view.plot(y=['integral_term'], ax=axes[3])
+            member.pid_view.plot(y=['integral_term_w_coefficient'], ax=axes[3])
+
+            axes[4].set_xlim([0, xlim])
+            axes[4].set_ylim([ypid_derivative_lowerlim, ypid_derivative_upperlim])
+
+            member.pid_view.plot(y=['derivative_term'], ax=axes[4])
+            member.pid_view.plot(y=['derivative_term_w_coefficient'], ax=axes[4])
+
+            axes[5].set_xlim([0, xlim])
+            axes[5].set_ylim([ypid_proportional_lowerlim, ypid_proportional_upperlim])
+
+            member.pid_view.plot(y=['proportional_term'], ax=axes[5])
+            member.pid_view.plot(y=['proportional_term_w_coefficient'], ax=axes[5])
+
+            plt.savefig(f'{directory}/{prefetcher_name}.png')
+            # plt.show()
 
             if not member.tracer_view.empty:
                 member.tracer_view.plot(kind='barh', stacked=True)
