@@ -20,6 +20,58 @@ def workload_type(hint, consumption_rate_func):
         def rate(self):
             return consumption_rate_func(self)
 
+        def should_adjust(self, before):
+            if self.adj_cnc(before) > 0:
+                return False
+
+
+        def adjust(self):
+            pass
+
+#         def run(self, *args, **kwargs):
+#             before = SuperInterval(tick=self.tick, rate=self.rate(),
+#                                    completed=self.completed,
+#                                    awaiting_dispatch=self.awaiting_dispatch,
+#                                    inflight=self.inflight)
+#             super().run(*args, **kwargs)
+#             ledger = self.pipeline['prefetcher'].ledger
+#             current_sample = ledger[-1]
+#             if len(ledger) > 1:
+#                 previous_sample = ledger[-2]
+
+#                 elapsed_current_period = self.tick - current_sample.tick
+#                 delta_cnc = self.completed - before.completed
+
+#                 depletion_rate = Fraction(delta_cnc, elapsed_current_period)
+
+#                 remaining_period_length = previous_sample.length - elapsed_current_period
+
+#                 expected_depletion = math.ceil(depletion_rate * remaining_period_length)
+
+
+#             if self.should_adjust(before):
+#                 self.adjust()
+
+        def adj_cnc(self, period):
+            return period.completed - self.cnc_headroom
+
+        @property
+        def completed(self):
+            return len(self.pipeline['completed'])
+
+        @property
+        def in_progress(self):
+            return self.counter - len(self.pipeline['consumed'])
+
+        @property
+        def awaiting_dispatch(self):
+            return self.in_progress - self.inflight - self.completed - len(self)
+
+        @property
+        def inflight(self):
+            return len(self.pipeline['inflight'])
+
+
     class consumed(StopBucket):
         pass
 

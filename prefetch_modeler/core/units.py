@@ -52,8 +52,8 @@ class Rate(BaseRate):
             self.value = Fraction(per_second, 1000 * 1000)
             self.original_unit = Unit.SECOND
 
-            if self.value.denominator != 1 and self.value.numerator != 1:
-                raise ValueError(f"per_second={per_second} must be divisible by 1,000,000")
+            # if self.value.denominator != 1 and self.value.numerator != 1:
+            #     raise ValueError(f"per_second={per_second} must be divisible by 1,000,000")
 
     def __str__(self):
         extension = f' per {(self.original_unit.name).lower()}'

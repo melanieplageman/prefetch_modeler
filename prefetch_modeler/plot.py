@@ -135,6 +135,7 @@ def io_data(data):
     }
     rename = {k: data[v] for k, v in rename.items() if v in data}
     view = view.assign(**rename)
+    print(view)
     return view
 
 def rate_data(data):
@@ -163,9 +164,9 @@ def rate_data(data):
 def pid_data(data):
     pid_view = pd.DataFrame(index=data.index)
     cr_rename = {
-        'derivative_term': 'remaining_derivative_term',
-        'proportional_term': 'remaining_proportional_term',
-        'integral_term': 'remaining_integral_term',
+        # 'derivative_term': 'remaining_derivative_term',
+        # 'proportional_term': 'remaining_proportional_term',
+        # 'integral_term': 'remaining_integral_term',
         'integral_term_w_coefficient': 'remaining_integral_term_w_coefficient',
         'proportional_term_w_coefficient': 'remaining_proportional_term_w_coefficient',
         'derivative_term_w_coefficient': 'remaining_derivative_term_w_coefficient',

@@ -124,6 +124,7 @@ class Cohort:
         ypid_derivative_upperlim *= 1.1
         ypid_proportional_upperlim *= 1.1
         yratelim *= 1.05
+        yiolim *= 1.05
         for member in self.members:
             title_str = ", ".join(hint for i, hint in
                 sorted(bucket_type.hint() for bucket_type in member.schema if
@@ -177,7 +178,7 @@ class Cohort:
             plt.savefig(f'{directory}/{prefetcher_name}.png')
             # plt.show()
 
-            if not member.tracer_view.empty:
-                member.tracer_view.plot(kind='barh', stacked=True)
-                plt.savefig(f'{directory}/{prefetcher_name}_tracer.png')
+            # if not member.tracer_view.empty:
+            #     member.tracer_view.plot(kind='barh', stacked=True)
+            #     plt.savefig(f'{directory}/{prefetcher_name}_tracer.png')
 
