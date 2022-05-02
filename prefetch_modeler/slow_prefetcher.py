@@ -1,4 +1,3 @@
-from enum import Enum
 from prefetch_modeler.core import GateBucket, ContinueBucket, \
 GlobalCapacityBucket, RateBucket, SamplingRateBucket, \
 Rate, Interval, Duration
@@ -22,6 +21,7 @@ class PIDPrefetchInterval(Interval):
     cnc_headroom: int
 
 class SlowPIDPrefetcher(SamplingRateBucket):
+    name = 'remaining'
     ki = -Rate(per_second=100).value       # should be in units of per-second
     kp = -0.9                               # should be dimensionless
     kd = -Duration(microseconds=2).total  # should be in units of seconds

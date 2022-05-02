@@ -1,13 +1,7 @@
-from enum import Enum
-from prefetch_modeler.core import GateBucket, ContinueBucket, \
-GlobalCapacityBucket, RateBucket, SamplingRateBucket, \
-Rate, Interval, Duration
+from prefetch_modeler.core import ContinueBucket, GlobalCapacityBucket, RateBucket, \
+Rate, Duration
 from prefetch_modeler.slow_prefetcher import SlowPIDPrefetcher
 from prefetch_modeler.fast_prefetcher import FastPIDPrefetcher
-from fractions import Fraction
-from dataclasses import dataclass
-import math
-import itertools
 
 
 class BaselineSync(GlobalCapacityBucket):

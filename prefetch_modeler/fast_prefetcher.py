@@ -22,6 +22,7 @@ class PIDPrefetchInterval(Interval):
     cnc_headroom: int
 
 class FastPIDPrefetcher(SamplingRateBucket):
+    name = 'remaining'
     ki = -Rate(per_second=40).value       # should be in units of per-second
     kp = -0.9                               # should be dimensionless
     kd = -Duration(microseconds=2).total  # should be in units of seconds
