@@ -2,6 +2,7 @@ from prefetch_modeler.storage_type import fast_local1, slow_cloud1
 from prefetch_modeler.core import Duration, Rate, Simulation
 from prefetch_modeler.plot import io_data, wait_data, rate_data, pid_data
 import matplotlib.pyplot as plt
+from chart_image import ChartImage
 
 class Member:
     def __init__(self, storage, workload, prefetcher):
@@ -147,8 +148,10 @@ class Cohort:
             member.rate_view.plot(ax=axes[2])
 
             prefetcher_name = '_'.join([bucket.__name__ for bucket in member.prefetcher])
+            filename = ChartImage(storage_name, workload_name).parented_path(prefetcher_name)
+
             if prefetcher_name in ['BaselineFetchAll', 'BaselineSync']:
-                plt.savefig(f'{directory}/{prefetcher_name}.png')
+                plt.savefig(filename)
                 continue
 
             # axes[3].set_xlim([0, xlim])
@@ -175,7 +178,7 @@ class Cohort:
             # if 'proportional_term_w_coefficient' in member.pid_view.columns:
             #     member.pid_view.plot(y=['proportional_term_w_coefficient'], ax=axes[5])
 
-            plt.savefig(f'{directory}/{prefetcher_name}.png')
+            plt.savefig(filename)
 
             # plt.show()
 
