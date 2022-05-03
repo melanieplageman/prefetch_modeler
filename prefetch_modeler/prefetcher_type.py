@@ -2,6 +2,7 @@ from prefetch_modeler.core import ContinueBucket, GlobalCapacityBucket, RateBuck
 Rate, Duration
 from prefetch_modeler.slow_prefetcher import SlowPIDPrefetcher
 from prefetch_modeler.fast_prefetcher import FastPIDPrefetcher
+from prefetch_modeler.test_prefetcher import TestPrefetcher
 
 
 class BaselineSync(GlobalCapacityBucket):
@@ -108,7 +109,7 @@ class PIDPrefetcher1(SlowPIDPrefetcher):
     ki = -Rate(per_second=10).value
     kp = -0.8
     kd = -Duration(microseconds=2).total
-    og_rate = Rate(per_second=400)
+    og_rate = Rate(per_second=4000)
 
 class PIDPrefetcher3(FastPIDPrefetcher):
     cnc_headroom = 100
@@ -117,6 +118,16 @@ class PIDPrefetcher3(FastPIDPrefetcher):
     kd = -Duration(microseconds=20).total
     og_rate = Rate(per_second=1000)
 
+class TestPrefetcher1(TestPrefetcher):
+    og_rate = Rate(per_second=6000)
+    sample_period = 200
+    lookback = 16
+
+class TestPrefetcher2(TestPrefetcher):
+    og_rate = Rate(per_second=6000)
+    sample_period = 200
+    lookback = 15
+
 
 prefetcher_list = [
     # [BaselineFetchAll],
@@ -124,8 +135,10 @@ prefetcher_list = [
     # [CoolPrefetcher],
     # [PIDPrefetcher3],
     # [PIDPrefetcher2],
-    [PIDPrefetcher1],
+    # [PIDPrefetcher1],
     # [SimpleSamplingPrefetcher5],
     # [ConstantPrefetcher],
     # [AdjustedPrefetcher2],
+    [TestPrefetcher1],
+    [TestPrefetcher2],
 ]

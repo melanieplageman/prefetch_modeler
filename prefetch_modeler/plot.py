@@ -111,8 +111,8 @@ def io_title(pipeline_config):
 def io_data(data):
     view = pd.DataFrame(index=data.index)
     rename = {
-        # 'remaining': 'remaining_num_ios',
-        # 'done': 'consumed_num_ios',
+        'remaining': 'remaining_num_ios',
+        'done': 'consumed_num_ios',
         # 'do_sync_fetch': 'baseline_sync_to_move',
         # 'do_fetch_all': 'baseline_all_to_move',
         # 'do_prefetch': 'remaining_to_move',
@@ -142,9 +142,11 @@ def rate_data(data):
     rate_view = pd.DataFrame(index=data.index)
     cr_rename = {
         'consumption_rate': 'completed_rate',
-        'prefetch_rate': 'remaining_rate',
-        # 'demand_rate': 'remaining_demand_rate',
-        # 'storage_completed_rate': 'remaining_storage_completed_rate',
+        # 'prefetch_rate': 'remaining_rate',
+        'demand_rate': 'remaining_demand_rate',
+        'storage_completed_rate': 'remaining_storage_completed_rate',
+        # 'cnc_rate': 'remaining_cnc_rate',
+        # 'awd_rate': 'remaining_awd_rate',
     }
     cr_rename = {k: data[v] for k, v in cr_rename.items() if v in data}
     rate_view = rate_view.assign(**cr_rename)
@@ -157,8 +159,13 @@ def rate_data(data):
         rate_view['storage_completed_rate'] = [value * 1000 * 1000 for value in rate_view['storage_completed_rate']]
     if 'demand_rate' in rate_view:
         rate_view['demand_rate'] = [value * 1000 * 1000 for value in rate_view['demand_rate']]
+    if 'cnc_rate' in rate_view:
+        rate_view['cnc_rate'] = [value * 1000 * 1000 for value in rate_view['cnc_rate']]
+    if 'awd_rate' in rate_view:
+        rate_view['awd_rate'] = [value * 1000 * 1000 for value in rate_view['awd_rate']]
     dropped_columns = [column for column in rate_view if column not in cr_rename.keys()]
     rate_view = rate_view.drop(columns=dropped_columns)
+    print(rate_view)
     return rate_view
 
 def pid_data(data):

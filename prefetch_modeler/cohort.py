@@ -20,7 +20,7 @@ class Member:
         simulation = Simulation(*self.prefetcher, *self.storage, *self.workload)
         self.schema = simulation.schema
 
-        result = simulation.run(1000, duration=Duration(seconds=20), traced=[1, 5, 100])
+        result = simulation.run(1000, duration=Duration(seconds=0.1), traced=[1, 5, 100])
         data = result.bucket_data
         self.data = data.reindex(data.index.union(data.index[1:] - 1), method='ffill')
         self.tracer_data = result.tracer_data
@@ -131,7 +131,7 @@ class Cohort:
                        bucket_type.hint() is not None)
             )
 
-            figure, axes = plt.subplots(6)
+            figure, axes = plt.subplots(3)
             figure.set_size_inches(15, 25)
 
             axes[0].set_xlim([0, xlim])
@@ -143,7 +143,7 @@ class Cohort:
             member.wait_view.astype(int).plot.area(ax=axes[1], stacked=False)
 
             axes[2].set_xlim([0, xlim])
-            axes[2].set_ylim([0, yratelim])
+            # axes[2].set_ylim([0, yratelim])
             member.rate_view.plot(ax=axes[2])
 
             prefetcher_name = '_'.join([bucket.__name__ for bucket in member.prefetcher])
@@ -151,31 +151,32 @@ class Cohort:
                 plt.savefig(f'{directory}/{prefetcher_name}.png')
                 continue
 
-            axes[3].set_xlim([0, xlim])
-            axes[3].set_ylim([ypid_integral_lowerlim, ypid_integral_upperlim])
+            # axes[3].set_xlim([0, xlim])
+            # axes[3].set_ylim([ypid_integral_lowerlim, ypid_integral_upperlim])
 
-            if 'integral_term' in member.pid_view.columns:
-                member.pid_view.plot(y=['integral_term'], ax=axes[3])
-            if 'integral_term_w_coefficient' in member.pid_view.columns:
-                member.pid_view.plot(y=['integral_term_w_coefficient'], ax=axes[3])
+            # if 'integral_term' in member.pid_view.columns:
+            #     member.pid_view.plot(y=['integral_term'], ax=axes[3])
+            # if 'integral_term_w_coefficient' in member.pid_view.columns:
+            #     member.pid_view.plot(y=['integral_term_w_coefficient'], ax=axes[3])
 
-            axes[4].set_xlim([0, xlim])
-            axes[4].set_ylim([ypid_derivative_lowerlim, ypid_derivative_upperlim])
+            # axes[4].set_xlim([0, xlim])
+            # axes[4].set_ylim([ypid_derivative_lowerlim, ypid_derivative_upperlim])
 
-            if 'derivative_term' in member.pid_view.columns:
-                member.pid_view.plot(y=['derivative_term'], ax=axes[4])
-            if 'derivative_term_w_coefficient' in member.pid_view.columns:
-                member.pid_view.plot(y=['derivative_term_w_coefficient'], ax=axes[4])
+            # if 'derivative_term' in member.pid_view.columns:
+            #     member.pid_view.plot(y=['derivative_term'], ax=axes[4])
+            # if 'derivative_term_w_coefficient' in member.pid_view.columns:
+            #     member.pid_view.plot(y=['derivative_term_w_coefficient'], ax=axes[4])
 
-            axes[5].set_xlim([0, xlim])
-            axes[5].set_ylim([ypid_proportional_lowerlim, ypid_proportional_upperlim])
+            # axes[5].set_xlim([0, xlim])
+            # axes[5].set_ylim([ypid_proportional_lowerlim, ypid_proportional_upperlim])
 
-            if 'proportional_term' in member.pid_view.columns:
-                member.pid_view.plot(y=['proportional_term'], ax=axes[5])
-            if 'proportional_term_w_coefficient' in member.pid_view.columns:
-                member.pid_view.plot(y=['proportional_term_w_coefficient'], ax=axes[5])
+            # if 'proportional_term' in member.pid_view.columns:
+            #     member.pid_view.plot(y=['proportional_term'], ax=axes[5])
+            # if 'proportional_term_w_coefficient' in member.pid_view.columns:
+            #     member.pid_view.plot(y=['proportional_term_w_coefficient'], ax=axes[5])
 
             plt.savefig(f'{directory}/{prefetcher_name}.png')
+
             # plt.show()
 
             # if not member.tracer_view.empty:

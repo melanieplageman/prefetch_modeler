@@ -109,8 +109,8 @@ class SlowPIDPrefetcher(SamplingRateBucket):
         change = self.adj_awd(self.ledger[-1]) - self.adj_awd(self.ledger[-2])
         length = self.ledger[-1].length
         return change / length
-        import math
-        return math.sqrt((change * change) / (length * length))
+        # import math
+        # return math.sqrt((change * change) / (length * length))
 
     @property
     def derivative_term(self):
@@ -176,7 +176,8 @@ class SlowPIDPrefetcher(SamplingRateBucket):
         self.log_to_move()
 
         if self.sample_io is not None:
-            return super().to_move()
+            to_move = super().to_move()
+            return to_move
 
         submitted = self.pipeline['submitted']
         submitted_ios = list(submitted.source.items())
