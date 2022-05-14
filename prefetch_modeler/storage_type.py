@@ -26,6 +26,10 @@ def io_uring(hint,
             return submission_overhead_func(self)
 
     class submitted(TargetCapacityBucket):
+        @property
+        def storage_speed(self):
+            return max_iops
+
         def target_capacity(self):
             capacity = completion_latency_func(self) * max_iops
             capacity = int(capacity)
@@ -47,6 +51,10 @@ def simple_storage(hint,
                  max_iops):
 
     class submitted(TargetCapacityBucket):
+        @property
+        def storage_speed(self):
+            return max_iops
+
         def target_capacity(self):
             capacity = completion_latency_func(self) * max_iops
             capacity = int(capacity)
@@ -67,7 +75,7 @@ def submission_latency(self):
 def local_storage_latency(self):
     return int(Duration(microseconds=500).total)
 
-fast_local1 = io_uring(
+fast_local1 = simple_storage(
     'Local Storage',
     max_buffers = 500,
     kernel_invoke_batch_size = 1,
@@ -79,13 +87,22 @@ fast_local1 = io_uring(
 def cloud_storage_latency(self):
     return int(Duration(milliseconds=3).total)
 
-slow_cloud1 = simple_storage(
+slow_cloud2 = simple_storage(
     'Cloud Storage',
     max_buffers = 200,
     kernel_invoke_batch_size = 1,
     submission_overhead_func = submission_latency,
     completion_latency_func = cloud_storage_latency,
     max_iops=Rate(per_second=2000).value,
+)
+
+slow_cloud1 = simple_storage(
+    'Cloud Storage',
+    max_buffers = 200,
+    kernel_invoke_batch_size = 1,
+    submission_overhead_func = submission_latency,
+    completion_latency_func = cloud_storage_latency,
+    max_iops=Rate(per_second=1000).value,
 )
 
 empty_storage = []
