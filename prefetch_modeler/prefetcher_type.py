@@ -2,7 +2,8 @@ from prefetch_modeler.core import ContinueBucket, GlobalCapacityBucket, RateBuck
 Rate, Duration
 from prefetch_modeler.slow_prefetcher import SlowPIDPrefetcher
 from prefetch_modeler.fast_prefetcher import FastPIDPrefetcher
-from prefetch_modeler.test_prefetcher import TestPrefetcher
+from prefetch_modeler.test_prefetcher import ControlPrefetcher
+from prefetch_modeler.piprefetcher import PIPrefetcher
 
 
 class BaselineSync(GlobalCapacityBucket):
@@ -34,6 +35,9 @@ class BaselineSync(GlobalCapacityBucket):
 
 class BaselineFetchAll(ContinueBucket):
     name = 'remaining'
+
+    def adjust(self):
+        pass
 
     def to_move(self):
         self.tick_data['awaiting_dispatch'] = self.awaiting_dispatch
@@ -118,16 +122,32 @@ class PIDPrefetcher3(FastPIDPrefetcher):
     kd = -Duration(microseconds=20).total
     og_rate = Rate(per_second=1000)
 
-class TestPrefetcher1(TestPrefetcher):
+class TestPrefetcher1(ControlPrefetcher):
     og_rate = Rate(per_second=6000)
     sample_period = 200
-    lookback = 16
+    raw_lookback = 2
+    avg_lookback = 2
 
-class TestPrefetcher2(TestPrefetcher):
-    og_rate = Rate(per_second=6000)
+class ControlPrefetcher2(ControlPrefetcher):
+    og_rate = Rate(per_second=2000)
     sample_period = 200
-    lookback = 15
+    raw_lookback = 5
+    avg_lookback = 3
 
+class PIPrefetcher1(PIPrefetcher):
+    og_rate = Rate(per_second=500)
+    raw_lookback = 4
+    avg_lookback = 3
+    awd_lookback = 3
+    kp = 0.5
+    kh = 0.4
+    ki_awd = -Rate(per_second=20).value
+    ki_cnc = -Rate(per_second=20).value
+    cnc_headroom = 50
+    min_cnc_headroom = 15
+
+class PIPrefetcher2(PIPrefetcher1):
+    min_cnc_headroom = 3
 
 prefetcher_list = [
     # [BaselineFetchAll],
@@ -139,6 +159,8 @@ prefetcher_list = [
     # [SimpleSamplingPrefetcher5],
     # [ConstantPrefetcher],
     # [AdjustedPrefetcher2],
-    [TestPrefetcher1],
-    [TestPrefetcher2],
+    # [TestPrefetcher1],
+    # [ControlPrefetcher2],
+    [PIPrefetcher1],
+    # [PIPrefetcher2],
 ]
