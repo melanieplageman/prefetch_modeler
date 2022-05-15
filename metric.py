@@ -35,7 +35,10 @@ def default_metrics(simulation):
 
     @simulation.metric('awaiting_dispatch')
     def metric(self):
-        return self['remaining'].awaiting_dispatch
+        in_progress = self['remaining'].counter - len(self['consumed'])
+        inflight = len(self['inflight'])
+        completed = len(self['completed'])
+        return in_progress - inflight - completed - len(self['remaining'])
 
     @simulation.metric('cnc_headroom')
     def metric(self):

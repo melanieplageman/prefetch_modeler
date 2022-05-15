@@ -12,50 +12,9 @@ class BaselineSync(GlobalCapacityBucket):
     def max_buffers(self):
         return 1
 
-    def to_move(self):
-        return super().to_move()
-
-    @property
-    def completed(self):
-        return len(self.pipeline['completed'])
-
-    @property
-    def in_progress(self):
-        return self.counter - len(self.pipeline['consumed'])
-
-    @property
-    def awaiting_dispatch(self):
-        return self.in_progress - self.inflight - self.completed - len(self)
-
-    @property
-    def inflight(self):
-        return len(self.pipeline['inflight'])
-
 
 class BaselineFetchAll(ContinueBucket):
     name = 'remaining'
-
-    def adjust(self):
-        pass
-
-    def to_move(self):
-        return super().to_move()
-
-    @property
-    def completed(self):
-        return len(self.pipeline['completed'])
-
-    @property
-    def in_progress(self):
-        return self.counter - len(self.pipeline['consumed'])
-
-    @property
-    def awaiting_dispatch(self):
-        return self.in_progress - self.inflight - self.completed - len(self)
-
-    @property
-    def inflight(self):
-        return len(self.pipeline['inflight'])
 
 
 class ConstantPrefetcher(RateBucket):
@@ -69,22 +28,6 @@ class ConstantPrefetcher(RateBucket):
 
     def rate(self):
         return self.og_rate.value
-
-    @property
-    def completed(self):
-        return len(self.pipeline['completed'])
-
-    @property
-    def in_progress(self):
-        return self.counter - len(self.pipeline['consumed'])
-
-    @property
-    def awaiting_dispatch(self):
-        return self.in_progress - self.inflight - self.completed - len(self)
-
-    @property
-    def inflight(self):
-        return len(self.pipeline['inflight'])
 
 
 class PIDPrefetcher2(FastPIDPrefetcher):
