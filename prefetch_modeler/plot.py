@@ -50,95 +50,98 @@ def calc_lower_ylim(df, columns, current_ylim):
 
     return min_y if min_y < current_ylim else current_ylim
 
-def dump_plots(cohort, storage_name, workload_name):
+class Limits:
     xlim = 0
-    yiolim, yratelim = 0, 0
-    ypid_integral_lowerlim, ypid_integral_upperlim = 0, 0
-    ypid_proportional_lowerlim, ypid_proportional_upperlim = 0, 0
-    ypid_derivative_lowerlim, ypid_derivative_upperlim = 0, 0
-    for member in cohort.members:
+    yiolim = 0
+    yratelim = 0
+    ypid_integral_lowerlim = 0
+    ypid_integral_upperlim = 0
+    ypid_proportional_lowerlim = 0
+    ypid_proportional_upperlim = 0
+
+def set_limits(simulations):
+    bounds = Limits()
+    for member in simulations:
         max_x = max(max(member.metric_data.index),
                     max(member.io_view.index))
-        xlim = max_x if max_x > xlim else xlim
+        bounds.xlim = max_x if max_x > bounds.xlim else bounds.xlim
 
-        yiolim = calc_upper_ylim(member.io_view, member.io_view.columns, yiolim)
+        bounds.yiolim = calc_upper_ylim(member.io_view, member.io_view.columns,
+                                        bounds.yiolim)
 
         # columns = ['prefetch_rate', 'consumption_rate']
-        # yratelim = calc_upper_ylim(member.metric_data, columns, yratelim)
+        # bounds.yratelim = calc_upper_ylim(member.metric_data, columns,
+        # bounds.yratelim)
 
         columns = ['awd_integral_term', 'cnc_integral_term',
                     'awd_integral_term_w_coefficient',
                     'cnc_integral_term_w_coefficient']
-        ypid_integral_upperlim = calc_upper_ylim(member.metric_data, columns, ypid_integral_upperlim)
-        ypid_integral_lowerlim = calc_lower_ylim(member.metric_data, columns, ypid_integral_lowerlim)
+        bounds.ypid_integral_upperlim = calc_upper_ylim(member.metric_data, columns,
+                                                 bounds.ypid_integral_upperlim)
+        bounds.ypid_integral_lowerlim = calc_lower_ylim(member.metric_data, columns,
+                                                 bounds.ypid_integral_lowerlim)
 
         columns = ['proportional_term', 'proportional_term_w_coefficient']
-        ypid_proportional_upperlim = calc_upper_ylim(member.metric_data, columns, ypid_proportional_upperlim)
-        ypid_proportional_lowerlim = calc_lower_ylim(member.metric_data, columns, ypid_proportional_lowerlim)
+        bounds.ypid_proportional_upperlim = calc_upper_ylim(member.metric_data,
+                                                     columns, bounds.ypid_proportional_upperlim)
+        bounds.ypid_proportional_lowerlim = calc_lower_ylim(member.metric_data,
+                                                     columns, bounds.ypid_proportional_lowerlim)
 
+    bounds.ypid_integral_upperlim *= 1.1
+    bounds.ypid_derivative_upperlim *= 1.1
+    bounds.ypid_proportional_upperlim *= 1.1
+    bounds.yratelim *= 1.05
+    bounds.yiolim *= 1.05
+    return bounds
+
+
+
+def dump_plots(member, storage_name, workload_name):
     directory = f'images/{storage_name}/{workload_name}/'
 
-    ypid_integral_upperlim *= 1.1
-    ypid_derivative_upperlim *= 1.1
-    ypid_proportional_upperlim *= 1.1
-    yratelim *= 1.05
-    yiolim *= 1.05
-    for member in cohort.members:
-        title_str = ", ".join(hint for i, hint in
-            sorted(bucket_type.hint() for bucket_type in member.schema if
-                    bucket_type.hint() is not None)
-        )
+    title_str = ", ".join(hint for i, hint in
+        sorted(bucket_type.hint() for bucket_type in member.schema if
+                bucket_type.hint() is not None)
+    )
 
-        figure, axes = plt.subplots(5)
-        figure.set_size_inches(15, 25)
+    figure, axes = plt.subplots(5)
+    figure.set_size_inches(15, 25)
 
-        axes[0].set_xlim([0, xlim])
-        axes[0].set_ylim([0, yiolim])
-        member.io_view.plot(ax=axes[0], title=title_str)
+    member.io_view.plot(ax=axes[0], title=title_str)
 
-        axes[1].get_yaxis().set_visible(False)
-        axes[1].set_xlim([0, xlim])
+    axes[1].get_yaxis().set_visible(False)
 
-        columns = ['wait_consume']
-        member.metric_data.astype(int).plot.area(y=columns, ax=axes[1], stacked=False)
+    columns = ['wait_consume']
+    member.metric_data.astype(int).plot.area(y=columns, ax=axes[1], stacked=False)
 
-        axes[2].set_xlim([0, xlim])
-        # axes[2].set_ylim([0, yratelim])
+    # columns = ['prefetch_rate', 'consumption_rate']
+    # member.metric_data.plot(y=columns, ax=axes[2])
 
-        # columns = ['prefetch_rate', 'consumption_rate']
-        # member.metric_data.plot(y=columns, ax=axes[2])
+    prefetcher_name = '_'.join([bucket.__name__ for bucket in member.prefetcher])
+    filename = ChartImage(storage_name, workload_name).parented_path(prefetcher_name)
 
-        prefetcher_name = '_'.join([bucket.__name__ for bucket in member.prefetcher])
-        filename = ChartImage(storage_name, workload_name).parented_path(prefetcher_name)
-
-        if prefetcher_name in ['BaselineFetchAll', 'BaselineSync']:
-            plt.savefig(filename)
-            continue
-
-        prop_ax = 3
-        integral_ax = 4
-
-        axes[prop_ax].set_xlim([0, xlim])
-        axes[prop_ax].set_ylim([ypid_proportional_lowerlim, ypid_proportional_upperlim])
-
-        columns = ['proportional_term', 'proportional_term_w_coefficient']
-        member.metric_data.plot(y=columns, ax=axes[prop_ax])
-
-        # axes[integral_ax].set_xlim([0, xlim])
-        # axes[integral_ax].set_ylim([ypid_integral_lowerlim, ypid_integral_upperlim])
-
-        columns = ['cnc_integral_term', 'cnc_integral_term_w_coefficient']
-        member.metric_data.plot(y=columns, ax=axes[integral_ax])
-
-        columns = ['awd_integral_term', 'awd_integral_term_w_coefficient']
-        member.metric_data.plot(y=columns, ax=axes[integral_ax])
-
-
+    if prefetcher_name in ['BaselineFetchAll', 'BaselineSync']:
         plt.savefig(filename)
+        return
 
-        # plt.show()
+    prop_ax = 3
+    integral_ax = 4
 
-        # if not member.tracer_view.empty:
-        #     member.tracer_view.plot(kind='barh', stacked=True)
-        #     plt.savefig(f'{directory}/{prefetcher_name}_tracer.png')
+    columns = ['proportional_term', 'proportional_term_w_coefficient']
+    member.metric_data.plot(y=columns, ax=axes[prop_ax])
+
+    columns = ['cnc_integral_term', 'cnc_integral_term_w_coefficient']
+    member.metric_data.plot(y=columns, ax=axes[integral_ax])
+
+    columns = ['awd_integral_term', 'awd_integral_term_w_coefficient']
+    member.metric_data.plot(y=columns, ax=axes[integral_ax])
+
+
+    plt.savefig(filename)
+
+    # plt.show()
+
+    # if not member.tracer_view.empty:
+    #     member.tracer_view.plot(kind='barh', stacked=True)
+    #     plt.savefig(f'{directory}/{prefetcher_name}_tracer.png')
 

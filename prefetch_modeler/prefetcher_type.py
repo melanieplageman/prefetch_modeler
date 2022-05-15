@@ -147,8 +147,10 @@ class PIPrefetcher1(PIPrefetcher):
 class PIPrefetcher2(PIPrefetcher1):
     min_cnc_headroom = 3
 
-prefetcher_list = [
-    [BaselineFetchAll],
+piprefetchera = [PIPrefetcher1]
+
+# prefetcher_list = [
+    # [BaselineFetchAll],
     # [BaselineSync],
     # [CoolPrefetcher],
     # [PIDPrefetcher3],
@@ -159,6 +161,6 @@ prefetcher_list = [
     # [AdjustedPrefetcher2],
     # [TestPrefetcher1],
     # [ControlPrefetcher2],
-    [PIPrefetcher1],
+    # [PIPrefetcher1],
     # [PIPrefetcher2],
-]
+# ]
