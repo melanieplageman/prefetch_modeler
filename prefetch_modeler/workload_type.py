@@ -94,7 +94,6 @@ def workload_type(hint, consumption_rate_func, saved_rates):
         cnc_headroom = 2
 
         def __init__(self, *args, **kwargs):
-            self.move_record = []
             self.consumerator = None
             self.saved_rates = saved_rates
             super().__init__(*args, **kwargs)
@@ -105,10 +104,6 @@ def workload_type(hint, consumption_rate_func, saved_rates):
 
         def rate(self):
             return consumption_rate_func(self)
-
-        def should_adjust(self, before):
-            if self.adj_cnc(before) > 0:
-                return False
 
         def next_action(self):
             # the lower bound of the next range in the ranges array
@@ -122,29 +117,6 @@ def workload_type(hint, consumption_rate_func, saved_rates):
             next_range_start = self.saved_rates.ranges[current_range_start + 1].start + 1
             # print(f'tick: {self.tick}. next_range_start: {next_range_start}. next_action: {next_action}')
             return min(next_range_start, next_action)
-
-        def adjust(self):
-            pass
-
-        def adj_cnc(self, period):
-            return period.completed - self.cnc_headroom
-
-        @property
-        def completed(self):
-            return len(self.pipeline['completed'])
-
-        @property
-        def in_progress(self):
-            return self.counter - len(self.pipeline['consumed'])
-
-        @property
-        def awaiting_dispatch(self):
-            return self.in_progress - self.inflight - self.completed - len(self)
-
-        @property
-        def inflight(self):
-            return len(self.pipeline['inflight'])
-
 
     class consumed(StopBucket):
         pass
