@@ -24,6 +24,8 @@ class Pipeline:
         for i in range(len(self.buckets) - 1):
             self.buckets[i].target = self.buckets[i + 1]
 
+        self.tick = 0
+
     def __getitem__(self, bucket_name):
         for bucket in self.buckets:
             if bucket.name == bucket_name:
@@ -36,12 +38,8 @@ class Pipeline:
 
         timeline = []
 
-        next_tick = 0
         last_tick = 0
-        while next_tick != math.inf:
-            for bucket in self.buckets:
-                bucket.tick = next_tick
-
+        while self.tick != math.inf:
             # Not possible to run some buckets and not others because one
             # bucket may move IOs into another bucket which affect whether or
             # not that bucket needs to run -- especially with infinity
@@ -53,7 +51,7 @@ class Pipeline:
 
             for bucket in self.buckets:
                 bucket.reaction()
-            timeline.append(next_tick)
+            timeline.append(self.tick)
 
             if len(self.buckets[-1]) == len(ios):
                 break
@@ -61,18 +59,18 @@ class Pipeline:
             actionable = {
                 bucket.name: bucket.next_action() for bucket in self.buckets
             }
-            bucket_name, next_tick = min(
+            bucket_name, self.tick = min(
                 actionable.items(),
                 key=lambda item: item[1])
 
-            if DEBUG and next_tick - last_tick == 1:
+            if DEBUG and self.tick - last_tick == 1:
                 print(last_tick, actionable)
 
-            if next_tick <= last_tick:
-                raise ValueError(f'Next action tick request {next_tick} (from {bucket_name}) is older than last action tick {last_tick}.')
-            last_tick = next_tick
+            if self.tick <= last_tick:
+                raise ValueError(f'Next action tick request {self.tick} (from {bucket_name}) is older than last action tick {last_tick}.')
+            last_tick = self.tick
 
-            if duration is not None and next_tick > duration.total:
+            if duration is not None and self.tick > duration.total:
                 break
 
         return timeline
@@ -88,10 +86,8 @@ class Bucket(OrderedDict):
 
         self.counter = 0
 
-        self._tick = None
-
-        self._data = []
-        self.tick_data = None
+        self._info_tick = 0
+        self._info = {}
 
         super().__init__()
 
@@ -124,18 +120,14 @@ class Bucket(OrderedDict):
 
     @property
     def tick(self):
-        return self._tick
-
-    @tick.setter
-    def tick(self, tick):
-        self._tick = tick
-        if self.tick_data is not None:
-            self._data.append(self.tick_data)
-        self.tick_data = {'tick': tick}
+        return self.pipeline.tick
 
     @property
-    def data(self):
-        return pd.DataFrame(self._data + [self.tick_data]).set_index('tick')
+    def info(self):
+        if self.tick == self._info_tick:
+            return self._info
+        self._info_tick, self._info = self.tick, {}
+        return self._info
 
     def to_move(self):
         raise NotImplementedError()
@@ -145,7 +137,7 @@ class Bucket(OrderedDict):
 
     def run(self):
         to_move = self.to_move()
-        self.tick_data['to_move'] = len(to_move)
+        self.info['to_move'] = len(to_move)
 
         if len(to_move):
             if LOG_BUCKETS:

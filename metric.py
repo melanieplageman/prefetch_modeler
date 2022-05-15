@@ -47,7 +47,7 @@ def default_metrics(simulation):
     @simulation.metric('wait_consume')
     def metric(self):
         completed = self['completed']
-        return completed.tick_data['want_to_move'] > completed.tick_data['to_move']
+        return completed.info['want_to_move'] > completed.info['to_move']
 
     @simulation.metric('remaining_ios')
     def metric(self):
@@ -79,12 +79,12 @@ def default_metrics(simulation):
 
     @simulation.metric('do_prefetch')
     def metric(self):
-        return self['remaining'].tick_data['to_move']
+        return self['remaining'].info['to_move']
 
 
     @simulation.metric('do_dispatch')
     def metric(self):
-        return self['submitted'].tick_data['to_move']
+        return self['submitted'].info['to_move']
 
     @simulation.metric('submitted')
     def metric(self):
@@ -96,16 +96,16 @@ def default_metrics(simulation):
 
     @simulation.metric('do_complete')
     def metric(self):
-        return self['inflight'].tick_data['to_move']
+        return self['inflight'].info['to_move']
 
     @simulation.metric('do_consume')
     def metric(self):
-        return self['completed'].tick_data['to_move']
+        return self['completed'].info['to_move']
 
 def storage_metrics(simulation):
     @simulation.metric('do_claim')
     def metric(self):
-        return self['awaiting_buffer'].tick_data['to_move']
+        return self['awaiting_buffer'].info['to_move']
 
     @simulation.metric('num_ios_w_buffer')
     def metric(self):
@@ -113,8 +113,8 @@ def storage_metrics(simulation):
 
     @simulation.metric('do_invoke_kernel')
     def metric(self):
-        return self['w_claimed_buffer'].tick_data['to_move']
+        return self['w_claimed_buffer'].info['to_move']
 
     @simulation.metric('do_submit')
     def metric(self):
-        return self['kernel_batch'].tick_data['to_move']
+        return self['kernel_batch'].info['to_move']

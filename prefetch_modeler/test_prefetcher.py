@@ -180,8 +180,8 @@ class ControlPrefetcher(RateBucket):
         pass
 
     def reaction(self):
-        if self.pipeline['completed'].tick_data['to_move']:
-            movement = Movement(self.tick, self.pipeline['completed'].tick_data['to_move'])
+        if self.pipeline['completed'].info['to_move']:
+            movement = Movement(self.tick, self.pipeline['completed'].info['to_move'])
             self.workload_record.append(movement)
             self.adjust()
 

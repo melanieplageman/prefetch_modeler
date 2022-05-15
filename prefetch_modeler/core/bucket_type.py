@@ -13,7 +13,7 @@ class GateBucket(Bucket):
 
     def to_move(self):
         size = self.wanted_move_size()
-        self.tick_data['want_to_move'] = size
+        self.info['want_to_move'] = size
         if size == math.inf:
             return frozenset(self.source)
         return frozenset(itertools.islice(self.source, size))
@@ -90,7 +90,7 @@ class RateBucket(Bucket):
 
         self.demanded += moveable
 
-        self.tick_data['want_to_move'] = moveable
+        self.info['want_to_move'] = moveable
 
         result = frozenset(itertools.islice(self.source, moveable))
         self.volume -= len(result)
