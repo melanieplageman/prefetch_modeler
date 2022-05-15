@@ -38,7 +38,7 @@ class Simulation:
             .pivot(index='io', columns='bucket', values='interval') \
             .reindex(bucket_sequence, axis='columns', fill_value=0)
 
-        return SimulationResult(bucket_data, tracer_data, metric_data)
+        return SimulationResult(tracer_data, metric_data)
 
     def metric(self, name):
         def decorator(function):
@@ -51,6 +51,5 @@ class Simulation:
 
 @dataclass(frozen=True)
 class SimulationResult:
-    bucket_data: pd.DataFrame
     tracer_data: pd.DataFrame
     metric_data: pd.DataFrame

@@ -30,24 +30,6 @@ class Pipeline:
                 return bucket
         raise KeyError(repr(bucket_name))
 
-    @classmethod
-    def bucket(cls, name):
-        """Define a bucket to be added to the pipeline on initialization."""
-        def call(bucket_type):
-            cls.template.append((name, bucket_type))
-            return bucket_type
-        return call
-
-    @property
-    def data(self):
-        """Return the tick joined data of each bucket in the pipeline."""
-        # TODO: Make a new dataframe with just the index column? So that we
-        # don't have to special case the first bucket?
-        data = self.buckets[0].data.add_prefix(f"{self.buckets[0].name}_")
-        for bucket in self.buckets[1:]:
-            data = data.join(bucket.data.add_prefix(f"{bucket.name}_"))
-        return data
-
     def run(self, ios, duration=None):
         for io in ios:
             self.buckets[0].add(io)
