@@ -34,7 +34,7 @@ class Pipeline:
         for io in ios:
             self.buckets[0].add(io)
 
-        metric_index = []
+        timeline = []
 
         next_tick = 0
         last_tick = 0
@@ -50,7 +50,7 @@ class Pipeline:
 
             for metric in self.metrics:
                 metric.run(self)
-            metric_index.append(next_tick)
+            timeline.append(next_tick)
 
             if len(self.buckets[-1]) == len(ios):
                 break
@@ -72,7 +72,7 @@ class Pipeline:
             if duration is not None and next_tick > duration.total:
                 break
 
-        return self.data, metric_index
+        return timeline
 
 
 class Bucket(OrderedDict):

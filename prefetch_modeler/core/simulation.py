@@ -25,11 +25,12 @@ class Simulation:
             getattr(bucket_type, 'name', bucket_type.__name__)
         ) for bucket_type in self.schema], **self.metric_schema)
 
-        bucket_data, metric_index = pipeline.run(ios, duration=duration)
+        timeline = pipeline.run(ios, duration=duration)
 
         metric_data = pd.DataFrame({
             name: metric.data for name, metric in self.metric_schema.items()
-        }, index=metric_index).rename_axis('tick')
+        }, index=timeline).rename_axis('tick')
+        metric_data = metric_data.reindex(metric_data.index.union(metric_data.index[1:] - 1), method='ffill')
 
         bucket_sequence = [bucket.name for bucket in pipeline.buckets]
         tracer_list = [io for io in ios if isinstance(io, Tracer)]

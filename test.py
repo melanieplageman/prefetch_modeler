@@ -10,7 +10,5 @@ simulation = Simulation(*slow_cloud1, *uneven_wl, *piprefetchera)
 default_metrics(simulation)
 result = simulation.run(1000, duration=Duration(seconds=0.2), traced=[1, 5, 100])
 
-# data = data.reindex(data.index.union(data.index[1:] - 1), method='ffill')
-
 dump_plots(simulation, result, storage_name='slow_cloud1',
            workload_name='uneven_wl', prefetcher_name='piprefetcher1')
