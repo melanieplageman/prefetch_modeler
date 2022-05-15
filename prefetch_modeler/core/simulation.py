@@ -9,7 +9,11 @@ class Metric:
         self.function = function
 
     def run(self, pipeline):
-        self.data.append(self.function(pipeline))
+        try:
+            result = self.function(pipeline)
+        except:
+            result = None
+        self.data.append(result)
 
 
 class Simulation:

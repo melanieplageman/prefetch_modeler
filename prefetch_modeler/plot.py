@@ -86,7 +86,8 @@ def dump_plots(simulation, result, storage_name, workload_name, prefetcher_name)
     axes[1].get_yaxis().set_visible(False)
 
     columns = ['wait_consume']
-    result.metric_data.astype(int).plot.area(y=columns, ax=axes[1], stacked=False)
+    wait_data = result.metric_data[columns].astype(int)
+    wait_data.plot.area(y=columns, ax=axes[1], stacked=False)
 
     columns = ['prefetch_rate', 'consumption_rate']
     result.metric_data.plot(y=columns, ax=axes[2])
