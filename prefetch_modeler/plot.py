@@ -30,74 +30,6 @@ def io_data(data):
     view = view.assign(**rename)
     return view
 
-def rate_data(data):
-    rate_view = pd.DataFrame(index=data.index)
-    cr_rename = {
-        'consumption_rate': 'completed_rate',
-        'prefetch_rate': 'remaining_rate',
-        'demand_rate': 'remaining_demand_rate',
-        'max_iops': 'remaining_max_iops',
-        # 'storage_completed_rate': 'remaining_storage_completed_rate',
-        # 'cnc_rate': 'remaining_cnc_rate',
-        # 'awd_rate': 'remaining_awd_rate',
-    }
-    cr_rename = {k: data[v] for k, v in cr_rename.items() if v in data}
-    rate_view = rate_view.assign(**cr_rename)
-
-    for attr in cr_rename.keys():
-        if attr in rate_view:
-            rate_view[attr] = [value * 1000 * 1000 for value in rate_view[attr]]
-
-    dropped_columns = [column for column in rate_view if column not in cr_rename.keys()]
-    rate_view = rate_view.drop(columns=dropped_columns)
-    # pd.set_option('display.max_rows', None)
-    print(rate_view)
-    return rate_view
-
-def pid_data(data):
-    pid_view = pd.DataFrame(index=data.index)
-    cr_rename = {
-        # 'derivative_term': 'remaining_derivative_term',
-        'proportional_term': 'remaining_proportional_term',
-        'integral_term': 'remaining_integral_term',
-        'integral_term_w_coefficient': 'remaining_integral_term_w_coefficient',
-        'cnc_integral_term': 'remaining_cnc_integral_term',
-        'cnc_integral_term_w_coefficient': 'remaining_cnc_integral_term_w_coefficient',
-        'awd_integral_term': 'remaining_awd_integral_term',
-        'awd_integral_term_w_coefficient': 'remaining_awd_integral_term_w_coefficient',
-        'proportional_term_w_coefficient': 'remaining_proportional_term_w_coefficient',
-        'derivative_term_w_coefficient': 'remaining_derivative_term_w_coefficient',
-    }
-
-    cr_rename = {k: data[v] for k, v in cr_rename.items() if v in data}
-    pid_view = pid_view.assign(**cr_rename)
-    dropped_columns = [column for column in pid_view if column not in cr_rename.keys()]
-    pid_view = pid_view.drop(columns=dropped_columns)
-    print(pid_view)
-    return pid_view
-
-def wait_data(data):
-    wait_view = pd.DataFrame(index=data.index)
-    for column in data:
-        if not column.endswith('_want_to_move'):
-            continue
-        bucket_name = column.removesuffix('_want_to_move')
-        wait_view[f'{bucket_name}_wait'] = data.apply(
-            lambda record: record[f'{bucket_name}_want_to_move'] > record[f'{bucket_name}_to_move'],
-            axis='columns')
-
-    wait_rename = {
-        # 'wait_dispatch': 'submitted_wait',
-        'wait_consume': 'completed_wait',
-    }
-
-    wait_rename = {k: wait_view[v] for k, v in wait_rename.items() if v in wait_view}
-    wait_view = wait_view.assign(**wait_rename)
-    dropped_columns = [column for column in wait_view if column not in wait_rename.keys()]
-    wait_view = wait_view.drop(columns=dropped_columns)
-    return wait_view
-
-
 def calc_upper_ylim(df, columns, current_ylim):
     max_y = 0
     for column in columns:
@@ -125,30 +57,24 @@ def dump_plots(cohort, storage_name, workload_name):
     ypid_proportional_lowerlim, ypid_proportional_upperlim = 0, 0
     ypid_derivative_lowerlim, ypid_derivative_upperlim = 0, 0
     for member in cohort.members:
-        max_x = max(max(member.rate_view.index),
-                    max(member.pid_view.index),
+        max_x = max(max(member.metric_data.index),
                     max(member.io_view.index))
         xlim = max_x if max_x > xlim else xlim
 
         yiolim = calc_upper_ylim(member.io_view, member.io_view.columns, yiolim)
 
-        yratelim = calc_upper_ylim(member.rate_view,
-                                    member.rate_view.columns, yratelim)
+        # columns = ['prefetch_rate', 'consumption_rate']
+        # yratelim = calc_upper_ylim(member.metric_data, columns, yratelim)
 
-        columns = ['integral_term', 'integral_term_w_coefficient',
-                    'awd_integral_term', 'cnc_integral_term',
+        columns = ['awd_integral_term', 'cnc_integral_term',
                     'awd_integral_term_w_coefficient',
                     'cnc_integral_term_w_coefficient']
-        ypid_integral_upperlim = calc_upper_ylim(member.pid_view, columns, ypid_integral_upperlim)
-        ypid_integral_lowerlim = calc_lower_ylim(member.pid_view, columns, ypid_integral_lowerlim)
-
-        columns = ['derivative_term', 'derivative_term_w_coefficient']
-        ypid_derivative_upperlim = calc_upper_ylim(member.pid_view, columns, ypid_derivative_upperlim)
-        ypid_derivative_lowerlim = calc_lower_ylim(member.pid_view, columns, ypid_derivative_lowerlim)
+        ypid_integral_upperlim = calc_upper_ylim(member.metric_data, columns, ypid_integral_upperlim)
+        ypid_integral_lowerlim = calc_lower_ylim(member.metric_data, columns, ypid_integral_lowerlim)
 
         columns = ['proportional_term', 'proportional_term_w_coefficient']
-        ypid_proportional_upperlim = calc_upper_ylim(member.pid_view, columns, ypid_proportional_upperlim)
-        ypid_proportional_lowerlim = calc_lower_ylim(member.pid_view, columns, ypid_proportional_lowerlim)
+        ypid_proportional_upperlim = calc_upper_ylim(member.metric_data, columns, ypid_proportional_upperlim)
+        ypid_proportional_lowerlim = calc_lower_ylim(member.metric_data, columns, ypid_proportional_lowerlim)
 
     directory = f'images/{storage_name}/{workload_name}/'
 
@@ -172,11 +98,15 @@ def dump_plots(cohort, storage_name, workload_name):
 
         axes[1].get_yaxis().set_visible(False)
         axes[1].set_xlim([0, xlim])
-        member.wait_view.astype(int).plot.area(ax=axes[1], stacked=False)
+
+        columns = ['wait_consume']
+        member.metric_data.astype(int).plot.area(y=columns, ax=axes[1], stacked=False)
 
         axes[2].set_xlim([0, xlim])
         # axes[2].set_ylim([0, yratelim])
-        member.rate_view.plot(ax=axes[2])
+
+        # columns = ['prefetch_rate', 'consumption_rate']
+        # member.metric_data.plot(y=columns, ax=axes[2])
 
         prefetcher_name = '_'.join([bucket.__name__ for bucket in member.prefetcher])
         filename = ChartImage(storage_name, workload_name).parented_path(prefetcher_name)
@@ -187,41 +117,21 @@ def dump_plots(cohort, storage_name, workload_name):
 
         prop_ax = 3
         integral_ax = 4
-        der_ax = 5
 
         axes[prop_ax].set_xlim([0, xlim])
         axes[prop_ax].set_ylim([ypid_proportional_lowerlim, ypid_proportional_upperlim])
 
-        if 'proportional_term' in member.pid_view.columns:
-            member.pid_view.plot(y=['proportional_term'], ax=axes[prop_ax])
-        if 'proportional_term_w_coefficient' in member.pid_view.columns:
-            member.pid_view.plot(y=['proportional_term_w_coefficient'], ax=axes[prop_ax])
+        columns = ['proportional_term', 'proportional_term_w_coefficient']
+        member.metric_data.plot(y=columns, ax=axes[prop_ax])
 
-        axes[integral_ax].set_xlim([0, xlim])
-        axes[integral_ax].set_ylim([ypid_integral_lowerlim, ypid_integral_upperlim])
+        # axes[integral_ax].set_xlim([0, xlim])
+        # axes[integral_ax].set_ylim([ypid_integral_lowerlim, ypid_integral_upperlim])
 
-        if 'integral_term' in member.pid_view.columns:
-            member.pid_view.plot(y=['integral_term'], ax=axes[integral_ax])
-        if 'integral_term_w_coefficient' in member.pid_view.columns:
-            member.pid_view.plot(y=['integral_term_w_coefficient'], ax=axes[integral_ax])
+        columns = ['cnc_integral_term', 'cnc_integral_term_w_coefficient']
+        member.metric_data.plot(y=columns, ax=axes[integral_ax])
 
-        if 'cnc_integral_term' in member.pid_view.columns:
-            member.pid_view.plot(y=['cnc_integral_term'], ax=axes[integral_ax])
-        if 'cnc_integral_term_w_coefficient' in member.pid_view.columns:
-            member.pid_view.plot(y=['cnc_integral_term_w_coefficient'], ax=axes[integral_ax])
-
-        if 'awd_integral_term' in member.pid_view.columns:
-            member.pid_view.plot(y=['awd_integral_term'], ax=axes[integral_ax])
-        if 'awd_integral_term_w_coefficient' in member.pid_view.columns:
-            member.pid_view.plot(y=['awd_integral_term_w_coefficient'], ax=axes[integral_ax])
-
-        # axes[der_ax].set_xlim([0, xlim])
-        # axes[der_ax].set_ylim([ypid_derivative_lowerlim, ypid_derivative_upperlim])
-
-        # if 'derivative_term' in member.pid_view.columns:
-        #     member.pid_view.plot(y=['derivative_term'], ax=axes[der_ax])
-        # if 'derivative_term_w_coefficient' in member.pid_view.columns:
-        #     member.pid_view.plot(y=['derivative_term_w_coefficient'], ax=axes[der_ax])
+        columns = ['awd_integral_term', 'awd_integral_term_w_coefficient']
+        member.metric_data.plot(y=columns, ax=axes[integral_ax])
 
 
         plt.savefig(filename)

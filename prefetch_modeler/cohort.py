@@ -1,16 +1,13 @@
 from prefetch_modeler.storage_type import fast_local1, slow_cloud1
 from prefetch_modeler.core import Duration, Rate, Simulation
-from prefetch_modeler.plot import io_data, wait_data, rate_data, pid_data
+from prefetch_modeler.plot import io_data
 import matplotlib.pyplot as plt
 
 class Member:
     def __init__(self, storage, workload, prefetcher):
         self.data = None
         self.tracer_data = None
-        self._wait_view = None
         self._io_view = None
-        self._rate_view = None
-        self._pid_view = None
         self.storage = storage
         self.workload = workload
         self.prefetcher = prefetcher
@@ -21,34 +18,37 @@ class Member:
 
         @simulation.metric('proportional_term')
         def metric(self):
-            return float(self['remaining'].proportional_term)
+            return float(getattr(self['remaining'], 'proportional_term', 0))
 
         @simulation.metric('proportional_term_w_coefficient')
         def metric(self):
-            prefetcher = self['remaining']
-            return float(prefetcher.proportional_term * prefetcher.kp)
+            term = float(getattr(self['remaining'], 'proportional_term', 0))
+            gain = float(getattr(self['remaining'], 'kp', 0))
+            return term * gain
 
         @simulation.metric('cnc_integral_term')
         def metric(self):
-            return float(self['remaining'].cnc_integral_term)
+            return float(getattr(self['remaining'], 'cnc_integral_term', 0))
 
         @simulation.metric('cnc_integral_term_w_coefficient')
         def metric(self):
-            prefetcher = self['remaining']
-            return float(prefetcher.cnc_integral_term * prefetcher.ki_cnc)
+            term = float(getattr(self['remaining'], 'cnc_integral_term', 0))
+            gain = float(getattr(self['remaining'], 'ki_cnc', 0))
+            return term * gain
 
         @simulation.metric('awd_integral_term')
         def metric(self):
-            return float(self['remaining'].awd_integral_term)
+            return float(getattr(self['remaining'], 'awd_integral_term', 0))
 
         @simulation.metric('awd_integral_term_w_coefficient')
         def metric(self):
-            prefetcher = self['remaining']
-            return float(prefetcher.awd_integral_term * prefetcher.ki_awd)
+            term = float(getattr(self['remaining'], 'awd_integral_term', 0))
+            gain = float(getattr(self['remaining'], 'ki_awd', 0))
+            return term * gain
 
         @simulation.metric('demand_rate')
         def metric(self):
-            return float(self['remaining'].demand_rate)
+            return float(getattr(self['remaining'], 'demand_rate', 0))
 
         @simulation.metric('awaiting_dispatch')
         def metric(self):
@@ -56,7 +56,7 @@ class Member:
 
         @simulation.metric('cnc_headroom')
         def metric(self):
-            return self['remaining'].cnc_headroom
+            return getattr(self['remaining'], 'cnc_headroom', 0)
 
         @simulation.metric('wait_consume')
         def metric(self):
@@ -71,13 +71,13 @@ class Member:
         def metric(self):
             return float(self['submitted'].storage_speed)
 
-        @simulation.metric('consumption_rate')
-        def metric(self):
-            return float(self['completed'].rate())
+        # @simulation.metric('consumption_rate')
+        # def metric(self):
+        #     return float(self['completed'].rate())
 
-        @simulation.metric('prefetch_rate')
-        def metric(self):
-            return float(self['remaining'].rate())
+        # @simulation.metric('prefetch_rate')
+        # def metric(self):
+        #     return float(self['remaining'].rate())
 
         self.schema = simulation.schema
 
@@ -86,24 +86,6 @@ class Member:
         self.data = data.reindex(data.index.union(data.index[1:] - 1), method='ffill')
         self.tracer_data = result.tracer_data
         self.metric_data = result.metric_data
-
-    @property
-    def wait_view(self):
-        if self._wait_view is None:
-            self._wait_view = wait_data(self.data)
-        return self._wait_view
-
-    @property
-    def rate_view(self):
-        if self._rate_view is None:
-            self._rate_view = rate_data(self.data)
-        return self._rate_view
-
-    @property
-    def pid_view(self):
-        if self._pid_view is None:
-            self._pid_view = pid_data(self.data)
-        return self._pid_view
 
     @property
     def io_view(self):
