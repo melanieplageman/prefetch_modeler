@@ -12,9 +12,14 @@ DEBUG = False
 class Pipeline:
     template = []
 
-    def __init__(self, *args):
+    def __init__(self, *args, **kwargs):
         self.buckets = [bucket_type(name, self) for name, bucket_type in self.template]
         self.buckets.extend(args)
+
+        for bucket in self.buckets:
+            bucket.pipeline = self
+
+        self.metrics = kwargs.values()
 
         for i in range(len(self.buckets) - 1):
             self.buckets[i].target = self.buckets[i + 1]
@@ -47,6 +52,8 @@ class Pipeline:
         for io in ios:
             self.buckets[0].add(io)
 
+        metric_index = []
+
         next_tick = 0
         last_tick = 0
         while next_tick != math.inf:
@@ -58,6 +65,10 @@ class Pipeline:
             # not that bucket needs to run -- especially with infinity
             for bucket in self.buckets:
                 bucket.run()
+
+            for metric in self.metrics:
+                metric.run(self)
+            metric_index.append(next_tick)
 
             if len(self.buckets[-1]) == len(ios):
                 break
@@ -79,13 +90,13 @@ class Pipeline:
             if duration is not None and next_tick > duration.total:
                 break
 
-        return self.data
+        return self.data, metric_index
 
 
 class Bucket(OrderedDict):
-    def __init__(self, name, pipeline):
+    def __init__(self, name):
         self.name = name
-        self.pipeline = pipeline
+        self.pipeline = None
 
         self.source = OrderedDict()
         self.target = self

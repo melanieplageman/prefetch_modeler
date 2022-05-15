@@ -19,12 +19,74 @@ class Member:
 
     def run(self):
         simulation = Simulation(*self.prefetcher, *self.storage, *self.workload)
+
+        @simulation.metric('proportional_term')
+        def metric(self):
+            return float(self['remaining'].proportional_term)
+
+        @simulation.metric('proportional_term_w_coefficient')
+        def metric(self):
+            prefetcher = self['remaining']
+            return float(prefetcher.proportional_term * prefetcher.kp)
+
+        @simulation.metric('cnc_integral_term')
+        def metric(self):
+            return float(self['remaining'].cnc_integral_term)
+
+        @simulation.metric('cnc_integral_term_w_coefficient')
+        def metric(self):
+            prefetcher = self['remaining']
+            return float(prefetcher.cnc_integral_term * prefetcher.ki_cnc)
+
+        @simulation.metric('awd_integral_term')
+        def metric(self):
+            return float(self['remaining'].awd_integral_term)
+
+        @simulation.metric('awd_integral_term_w_coefficient')
+        def metric(self):
+            prefetcher = self['remaining']
+            return float(prefetcher.awd_integral_term * prefetcher.ki_awd)
+
+        @simulation.metric('demand_rate')
+        def metric(self):
+            return float(self['remaining'].demand_rate)
+
+        @simulation.metric('awaiting_dispatch')
+        def metric(self):
+            return self['remaining'].awaiting_dispatch
+
+        @simulation.metric('cnc_headroom')
+        def metric(self):
+            return self['remaining'].cnc_headroom
+
+        @simulation.metric('wait_consume')
+        def metric(self):
+            completed = self['completed']
+            return completed.tick_data['want_to_move'] > completed.tick_data['to_move']
+
+        @simulation.metric('remaining_ios')
+        def metric(self):
+            return len(self['remaining'])
+
+        @simulation.metric('max_iops')
+        def metric(self):
+            return float(self['submitted'].storage_speed)
+
+        @simulation.metric('consumption_rate')
+        def metric(self):
+            return float(self['completed'].rate())
+
+        @simulation.metric('prefetch_rate')
+        def metric(self):
+            return float(self['remaining'].rate())
+
         self.schema = simulation.schema
 
         result = simulation.run(1000, duration=Duration(seconds=0.2), traced=[1, 5, 100])
         data = result.bucket_data
         self.data = data.reindex(data.index.union(data.index[1:] - 1), method='ffill')
         self.tracer_data = result.tracer_data
+        self.metric_data = result.metric_data
 
     @property
     def wait_view(self):

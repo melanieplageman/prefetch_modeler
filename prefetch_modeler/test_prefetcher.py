@@ -164,19 +164,11 @@ class ControlPrefetcher(RateBucket):
 
     def run(self, *args, **kwargs):
         self.log_rates()
-        self.tick_data['awaiting_dispatch'] = self.awaiting_dispatch
         # if len(self.ledger) > 2:
         #     self.log_rates()
         # if self.should_sample():
         #     self.sample()
         super().run(*args, **kwargs)
-
-    def log_rates(self):
-        self.tick_data['demand_rate'] = float(self.demand_rate)
-        self.tick_data['max_iops'] = float(self.pipeline['submitted'].storage_speed)
-        # self.tick_data['storage_completed_rate'] = float(self.storage_complete_rate)
-        # self.tick_data['awd_rate'] = float(self.awd_rate)
-        # self.tick_data['cnc_rate'] = float(self.cnc_rate)
 
     def adjust(self):
         pass

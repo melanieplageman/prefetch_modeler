@@ -13,7 +13,6 @@ class BaselineSync(GlobalCapacityBucket):
         return 1
 
     def to_move(self):
-        self.tick_data['awaiting_dispatch'] = self.awaiting_dispatch
         return super().to_move()
 
     @property
@@ -40,7 +39,6 @@ class BaselineFetchAll(ContinueBucket):
         pass
 
     def to_move(self):
-        self.tick_data['awaiting_dispatch'] = self.awaiting_dispatch
         return super().to_move()
 
     @property

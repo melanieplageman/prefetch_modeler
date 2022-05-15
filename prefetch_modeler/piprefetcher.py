@@ -218,20 +218,7 @@ class PIPrefetcher(RateBucket):
         return Fraction(total, self.avg_lookback)
 
     def run(self, *args, **kwargs):
-        self.log_rates()
         super().run(*args, **kwargs)
-
-    def log_rates(self):
-        self.tick_data['demand_rate'] = float(self.demand_rate)
-        self.tick_data['awaiting_dispatch'] = self.awaiting_dispatch
-        self.tick_data['max_iops'] = float(self.pipeline['submitted'].storage_speed)
-        self.tick_data['proportional_term'] = float(self.proportional_term)
-        self.tick_data['proportional_term_w_coefficient'] = float(self.proportional_term * self.kp)
-        self.tick_data['cnc_integral_term_w_coefficient'] = float(self.cnc_integral_term * self.ki_cnc)
-        self.tick_data['cnc_integral_term'] = float(self.cnc_integral_term)
-        self.tick_data['awd_integral_term_w_coefficient'] = float(self.awd_integral_term * self.ki_awd)
-        self.tick_data['awd_integral_term'] = float(self.awd_integral_term)
-        self.tick_data['cnc_headroom'] = self.cnc_headroom
 
     @property
     def proportional_term(self):

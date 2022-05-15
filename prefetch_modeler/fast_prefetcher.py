@@ -117,19 +117,6 @@ class FastPIDPrefetcher(SamplingRateBucket):
 
         return log_str
 
-    def log_to_move(self):
-        self.tick_data['awaiting_dispatch'] = self.awaiting_dispatch
-        self.tick_data['demand_rate'] = float(self.demand_rate)
-        self.tick_data['storage_completed_rate'] = float(self.storage_complete_rate)
-        self.tick_data['integral_term_w_coefficient'] = float(self.period.integral_term * self.ki)
-        self.tick_data['integral_term'] = float(self.period.integral_term)
-        self.tick_data['derivative_term_w_coefficient'] = float(self.period.derivative_term * self.kd)
-        self.tick_data['derivative_term'] = float(self.period.derivative_term)
-        self.tick_data['proportional_term_w_coefficient'] = float(self.period.proportional_term * self.kp)
-        self.tick_data['proportional_term'] = float(self.period.proportional_term)
-        self.tick_data['cnc_headroom'] = self.cnc_headroom
-        self.tick_data['aw_headroom'] = self.aw_headroom
-
     @property
     def demand_rate(self):
         if len(self.ledger) < 2:
@@ -173,8 +160,6 @@ class FastPIDPrefetcher(SamplingRateBucket):
         return len(self.pipeline['inflight'])
 
     def to_move(self):
-        self.log_to_move()
-
         if self.rate() == 0 and self.sample_io is None and len(self.source):
             self.sample_io = next(iter(self.source))
             return frozenset([self.sample_io])
