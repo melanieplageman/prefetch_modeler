@@ -158,23 +158,8 @@ class SlowPIDPrefetcher(SamplingRateBucket):
 
         return log_str + p0_log_str + p1_log_str + p2_log_str
 
-    def log_to_move(self):
-        self.tick_data['awaiting_dispatch'] = self.awaiting_dispatch
-        self.tick_data['demand_rate'] = float(self.demand_rate)
-        self.tick_data['storage_completed_rate'] = float(self.storage_complete_rate)
-        self.tick_data['integral_term_w_coefficient'] = float(self.period.integral_term * self.ki)
-        self.tick_data['integral_term'] = float(self.period.integral_term)
-        self.tick_data['derivative_term_w_coefficient'] = float(self.period.derivative_term * self.kd)
-        self.tick_data['derivative_term'] = float(self.period.derivative_term)
-        self.tick_data['proportional_term_w_coefficient'] = float(self.period.proportional_term * self.kp)
-        self.tick_data['proportional_term'] = float(self.period.proportional_term)
-        self.tick_data['cnc_headroom'] = self.cnc_headroom
-        self.tick_data['aw_headroom'] = self.aw_headroom
-
 
     def to_move(self):
-        self.log_to_move()
-
         if self.sample_io is not None:
             to_move = super().to_move()
             return to_move

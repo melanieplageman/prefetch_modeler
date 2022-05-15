@@ -169,5 +169,3 @@ class Bucket(OrderedDict):
         for io in to_move:
             self.remove(io)
             self.target.add(io)
-
-        self.tick_data['num_ios'] = len(self)
