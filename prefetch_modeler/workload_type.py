@@ -14,9 +14,6 @@ class SuperInterval(Interval):
     inflight: int
 
 
-from collections import namedtuple
-Movement = namedtuple('MovementRecord', ['tick', 'number'])
-
 class rangerator:
     def __init__(self, steps):
         self.steps = steps
@@ -112,13 +109,6 @@ def workload_type(hint, consumption_rate_func, saved_rates):
         def should_adjust(self, before):
             if self.adj_cnc(before) > 0:
                 return False
-
-        def to_move(self):
-            result = super().to_move()
-            if result:
-                self.move_record.append(Movement(self.tick, len(result)))
-                self.pipeline['remaining'].adjust()
-            return result
 
         def next_action(self):
             # the lower bound of the next range in the ranges array

@@ -18,6 +18,10 @@ class RateLogItem:
     raw_rate: Fraction
     demand_rate: Fraction
 
+from collections import namedtuple
+Movement = namedtuple('MovementRecord', ['tick', 'number'])
+
+
 class ControlPrefetcher(RateBucket):
     name = 'remaining'
     og_rate = Rate(per_second=6000)
@@ -36,6 +40,7 @@ class ControlPrefetcher(RateBucket):
         super().__init__(*args, **kwargs)
         self._rate = self.rate()
         print(f"Initial Rate: {self._rate} {float(self._rate)}")
+        self.workload_record = []
 
     def get_periods(self):
         if len(self.ledger) < self.raw_lookback:
@@ -101,7 +106,8 @@ class ControlPrefetcher(RateBucket):
 
     @property
     def demand_rate(self):
-        move_record = list(reversed(self.pipeline['completed'].move_record))
+        # move_record = list(reversed(self.pipeline['completed'].move_record))
+        move_record = list(reversed(self.workload_record))
         intervals = list(zip(move_record, move_record[1:]))
 
         number_moved = 0
@@ -172,6 +178,13 @@ class ControlPrefetcher(RateBucket):
 
     def adjust(self):
         pass
+
+    def reaction(self):
+        if self.pipeline['completed'].tick_data['to_move']:
+            movement = Movement(self.tick, self.pipeline['completed'].tick_data['to_move'])
+            self.workload_record.append(movement)
+            self.adjust()
+
 
     def sample(self):
         self.period.length = self.tick - self.period.tick

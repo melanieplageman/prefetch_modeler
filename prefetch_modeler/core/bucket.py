@@ -50,6 +50,9 @@ class Pipeline:
 
             for metric in self.metrics:
                 metric.run(self)
+
+            for bucket in self.buckets:
+                bucket.reaction()
             timeline.append(next_tick)
 
             if len(self.buckets[-1]) == len(ios):
@@ -151,3 +154,6 @@ class Bucket(OrderedDict):
         for io in to_move:
             self.remove(io)
             self.target.add(io)
+
+    def reaction(self):
+        pass

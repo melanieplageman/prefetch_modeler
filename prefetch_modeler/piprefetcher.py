@@ -22,6 +22,9 @@ class RateLogItem:
 def humanify(rate):
     return math.ceil(float(rate) * 1000 * 1000)
 
+from collections import namedtuple
+Movement = namedtuple('MovementRecord', ['tick', 'number'])
+
 class PIPrefetcher(RateBucket):
     name = 'remaining'
     og_rate = Rate(per_second=6000)
@@ -45,6 +48,7 @@ class PIPrefetcher(RateBucket):
         super().__init__(*args, **kwargs)
         self._rate = self.rate()
         print(f"Initial Rate: {self._rate} {float(self._rate)}")
+        self.workload_record = []
 
     def rate(self):
         return self.current_rate_value
@@ -174,7 +178,8 @@ class PIPrefetcher(RateBucket):
 
     @property
     def raw_demand_rate(self):
-        move_record = list(reversed(self.pipeline['completed'].move_record))
+        # move_record = list(reversed(self.pipeline['completed'].move_record))
+        move_record = list(reversed(self.workload_record))
         intervals = list(zip(move_record, move_record[1:]))
 
         number_moved = 0
@@ -305,3 +310,9 @@ class PIPrefetcher(RateBucket):
                                            cnc_headroom=self.cnc_headroom,
                                            lt_demanded=self.lifetime_demands,
                                        lt_completed=self.lifetime_completes))
+
+    def reaction(self):
+        if self.pipeline['completed'].tick_data['to_move']:
+            movement = Movement(self.tick, self.pipeline['completed'].tick_data['to_move'])
+            self.workload_record.append(movement)
+            self.adjust()
