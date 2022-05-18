@@ -1,7 +1,6 @@
 from prefetch_modeler.core import ContinueBucket, GlobalCapacityBucket, RateBucket, \
 Rate, Duration
 from prefetch_modeler.slow_prefetcher import SlowPIDPrefetcher
-from prefetch_modeler.fast_prefetcher import FastPIDPrefetcher
 from prefetch_modeler.test_prefetcher import ControlPrefetcher
 from prefetch_modeler.piprefetcher import PIPrefetcher
 
@@ -30,18 +29,6 @@ class ConstantPrefetcher(RateBucket):
         return self.og_rate.value
 
 
-class PIDPrefetcher2(FastPIDPrefetcher):
-    ki = -Rate(per_second=20).value       # should be in units of per-second
-    kp = -0.3                               # should be dimensionless
-    kd = -Duration(microseconds=2).total  # should be in units of seconds
-    og_rate = Rate(per_second=2000)
-
-class PIDPrefetcher2(FastPIDPrefetcher):
-    cnc_headroom = 16
-    ki = -Rate(per_second=50).value
-    kp = -0.6
-    kd = -Duration(microseconds=20).total
-    og_rate = Rate(per_second=2000)
 
 class PIDPrefetcher4(SlowPIDPrefetcher):
     ki = -Rate(per_second=2000).value
@@ -56,12 +43,6 @@ class PIDPrefetcher1(SlowPIDPrefetcher):
     kd = -Duration(microseconds=2).total
     og_rate = Rate(per_second=4000)
 
-class PIDPrefetcher3(FastPIDPrefetcher):
-    cnc_headroom = 100
-    ki = -Rate(per_second=20).value
-    kp = -0.6
-    kd = -Duration(microseconds=20).total
-    og_rate = Rate(per_second=1000)
 
 class TestPrefetcher1(ControlPrefetcher):
     og_rate = Rate(per_second=6000)
