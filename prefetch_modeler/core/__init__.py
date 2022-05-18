@@ -8,5 +8,5 @@ from prefetch_modeler.core.bucket import Pipeline, Bucket
 from prefetch_modeler.core.bucket_type import GateBucket, DialBucket, \
     ContinueBucket, StopBucket, RateBucket, ThresholdBucket, CapacityBucket, \
     TargetCapacityBucket, GlobalCapacityBucket, SamplingRateBucket
-from prefetch_modeler.core.simulation import Simulation
+from prefetch_modeler.core.simulation import Simulation, Metric
 from prefetch_modeler.core.units import Duration, Rate, Interval

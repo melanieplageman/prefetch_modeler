@@ -51,6 +51,10 @@ def simple_storage(hint,
                  max_iops):
 
     class submitted(TargetCapacityBucket):
+        @classmethod
+        def hint(cls):
+            return (0, hint)
+
         @property
         def storage_speed(self):
             return max_iops

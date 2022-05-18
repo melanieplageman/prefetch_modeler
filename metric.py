@@ -1,120 +1,122 @@
-def default_metrics(simulation):
-    @simulation.metric('proportional_term')
-    def metric(self):
-        return float(getattr(self['remaining'], 'proportional_term', 0))
-
-    @simulation.metric('proportional_term_w_coefficient')
-    def metric(self):
-        term = float(getattr(self['remaining'], 'proportional_term', 0))
-        gain = float(getattr(self['remaining'], 'kp', 0))
-        return term * gain
-
-    @simulation.metric('cnc_integral_term')
-    def metric(self):
-        return float(getattr(self['remaining'], 'cnc_integral_term', 0))
-
-    @simulation.metric('cnc_integral_term_w_coefficient')
-    def metric(self):
-        term = float(getattr(self['remaining'], 'cnc_integral_term', 0))
-        gain = float(getattr(self['remaining'], 'ki_cnc', 0))
-        return term * gain
-
-    @simulation.metric('awd_integral_term')
-    def metric(self):
-        return float(getattr(self['remaining'], 'awd_integral_term', 0))
-
-    @simulation.metric('awd_integral_term_w_coefficient')
-    def metric(self):
-        term = float(getattr(self['remaining'], 'awd_integral_term', 0))
-        gain = float(getattr(self['remaining'], 'ki_awd', 0))
-        return term * gain
-
-    @simulation.metric('demand_rate')
-    def metric(self):
-        return float(getattr(self['remaining'], 'demand_rate', 0))
-
-    @simulation.metric('awaiting_dispatch')
-    def metric(self):
-        in_progress = self['remaining'].counter - len(self['consumed'])
-        inflight = len(self['inflight'])
-        completed = len(self['completed'])
-        return in_progress - inflight - completed - len(self['remaining'])
-
-    @simulation.metric('cnc_headroom')
-    def metric(self):
-        return getattr(self['remaining'], 'cnc_headroom', 0)
-
-    @simulation.metric('wait_consume')
-    def metric(self):
-        completed = self['completed']
-        return completed.info['want_to_move'] > completed.info['to_move']
-
-    @simulation.metric('remaining_ios')
-    def metric(self):
-        return len(self['remaining'])
-
-    @simulation.metric('max_iops')
-    def metric(self):
-        return float(self['submitted'].storage_speed)
-
-    @simulation.metric('consumption_rate')
-    def metric(self):
-        return float(self['completed'].rate())
-
-    @simulation.metric('prefetch_rate')
-    def metric(self):
-        return float(self['remaining'].rate())
-
-    @simulation.metric('completed_not_consumed')
-    def metric(self):
-        return len(self['completed'])
-
-    @simulation.metric('remaining')
-    def metric(self):
-        return len(self['remaining'])
-
-    @simulation.metric('done')
-    def metric(self):
-        return len(self['consumed'])
-
-    @simulation.metric('do_prefetch')
-    def metric(self):
-        return self['remaining'].info['to_move']
+from prefetch_modeler.core import Metric
 
 
-    @simulation.metric('do_dispatch')
-    def metric(self):
-        return self['submitted'].info['to_move']
+def metric(function):
+    metric_type = type(Metric)(function.__name__, (Metric,), {"function": staticmethod(function)})
+    return metric_type
 
-    @simulation.metric('submitted')
-    def metric(self):
-        return len(self['submitted'])
 
-    @simulation.metric('inflight')
-    def metric(self):
-        return len(self['inflight'])
+@metric
+def completed_not_consumed(pipeline):
+    return len(pipeline['completed'])
 
-    @simulation.metric('do_complete')
-    def metric(self):
-        return self['inflight'].info['to_move']
+@metric
+def remaining(pipeline):
+    return len(pipeline['remaining'])
 
-    @simulation.metric('do_consume')
-    def metric(self):
-        return self['completed'].info['to_move']
+@metric
+def done(pipeline):
+    return len(pipeline['consumed'])
 
-def storage_metrics(simulation):
-    @simulation.metric('do_claim')
-    def metric(self):
-        return self['awaiting_buffer'].info['to_move']
+@metric
+def cnc_headroom(pipeline):
+    return pipeline['remaining'].cnc_headroom
 
-    @simulation.metric('num_ios_w_buffer')
-    def metric(self):
-        return len(self['w_claimed_buffer'])
+@metric
+def awaiting_dispatch(pipeline):
+    in_progress = pipeline['remaining'].counter - len(pipeline['consumed'])
+    inflight = len(pipeline['inflight'])
+    completed = len(pipeline['completed'])
+    return in_progress - inflight - completed - len(pipeline['remaining'])
 
-    @simulation.metric('do_invoke_kernel')
-    def metric(self):
-        return self['w_claimed_buffer'].info['to_move']
+@metric
+def do_prefetch(pipeline):
+    return pipeline['remaining'].info['to_move']
 
-    @simulation.metric('do_submit')
-    def metric(self):
-        return self['kernel_batch'].info['to_move']
+@metric
+def do_dispatch(pipeline):
+    return pipeline['submitted'].info['to_move']
+
+@metric
+def submitted(pipeline):
+    return len(pipeline['submitted'])
+
+@metric
+def inflight(pipeline):
+    return len(pipeline['inflight'])
+
+@metric
+def do_complete(pipeline):
+    return pipeline['inflight'].info['to_move']
+
+@metric
+def do_consume(pipeline):
+    return pipeline['completed'].info['to_move']
+
+@metric
+def do_consume(pipeline):
+    return pipeline['awaiting_buffer'].info['to_move']
+
+@metric
+def num_ios_w_buffer(pipeline):
+    return len(pipeline['w_claimed_buffer'])
+
+@metric
+def do_invoke_kernel(pipeline):
+    return pipeline['w_claimed_buffer'].info['to_move']
+
+@metric
+def do_submit(pipeline):
+    return pipeline['kernel_batch'].info['to_move']
+
+@metric
+def wait_consume(pipeline):
+    completed = pipeline['completed']
+    return int(completed.info['want_to_move'] > completed.info['to_move'])
+
+@metric
+def demand_rate(pipeline):
+    return float(pipeline['remaining'].demand_rate)
+
+@metric
+def consumption_rate(pipeline):
+    return float(pipeline['completed'].rate())
+
+@metric
+def prefetch_rate(pipeline):
+    return float(pipeline['remaining'].rate())
+
+@metric
+def max_iops(pipeline):
+    return float(pipeline['submitted'].storage_speed)
+
+
+@metric
+def proportional_term(pipeline):
+    return float(pipeline['remaining'].proportional_term)
+
+@metric
+def proportional_term_w_coefficient(pipeline):
+    term = pipeline['remaining'].proportional_term
+    gain = pipeline['remaining'].kp
+    return float(term * gain)
+
+@metric
+def cnc_integral_term(pipeline):
+    return float(pipeline['remaining'].cnc_integral_term)
+
+@metric
+def cnc_integral_term_w_coefficient(pipeline):
+    term = pipeline['remaining'].cnc_integral_term
+    gain = pipeline['remaining'].ki_cnc
+    return float(term * gain)
+
+@metric
+def awd_integral_term(pipeline):
+    return float(pipeline['remaining'].awd_integral_term)
+
+@metric
+def awd_integral_term_w_coefficient(pipeline):
+    term = pipeline['remaining'].awd_integral_term
+    gain = pipeline['remaining'].ki_awd
+    return float(term * gain)

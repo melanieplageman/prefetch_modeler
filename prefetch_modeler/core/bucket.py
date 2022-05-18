@@ -12,14 +12,14 @@ DEBUG = False
 class Pipeline:
     template = []
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args):
         self.buckets = [bucket_type(name, self) for name, bucket_type in self.template]
         self.buckets.extend(args)
 
         for bucket in self.buckets:
             bucket.pipeline = self
 
-        self.metrics = kwargs.values()
+        self.metrics = set()
 
         for i in range(len(self.buckets) - 1):
             self.buckets[i].target = self.buckets[i + 1]
@@ -31,6 +31,9 @@ class Pipeline:
             if bucket.name == bucket_name:
                 return bucket
         raise KeyError(repr(bucket_name))
+
+    def attach_metric(self, metric):
+        self.metrics.add(metric)
 
     def run(self, ios, duration=None):
         for io in ios:

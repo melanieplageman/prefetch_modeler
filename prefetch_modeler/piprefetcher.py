@@ -298,10 +298,10 @@ class PIPrefetcher(RateBucket):
         awd_ilog = f'AWD I: {awd_i}. AWD_IwC: {humanify(awd_ic)}. '
         nprlog = f'new pr: {humanify(new_rate)}. '
 
-        print(f'Tick: {self.tick}. {backlog_log}')
-        print(f'Tick: {self.tick}. {roc_log}')
-        print(f'Tick: {self.tick}. {completion_info_log}')
-        print(f'Tick: {self.tick}. ' + prlog + drlog + plog + cnc_ilog + awd_ilog + nprlog)
+        # print(f'Tick: {self.tick}. {backlog_log}')
+        # print(f'Tick: {self.tick}. {roc_log}')
+        # print(f'Tick: {self.tick}. {completion_info_log}')
+        # print(f'Tick: {self.tick}. ' + prlog + drlog + plog + cnc_ilog + awd_ilog + nprlog)
 
         self.demand_rate_log.append(RateLogItem(tick=self.tick, raw_rate=self.raw_demand_rate))
         self.ledger.append(LedgerEntry(tick=self.tick, completed=self.completed,

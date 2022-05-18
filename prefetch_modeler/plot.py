@@ -1,121 +1,127 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 from chart_image import ChartImage
+import matplotlib.gridspec as gridspec
 
-def calc_upper_ylim(df, columns, current_ylim):
-    max_y = 0
-    for column in columns:
-        if column not in df.columns:
-            continue
-        column_max_y = max(df[column])
-        max_y = column_max_y if column_max_y > max_y else max_y
+class ChartGroup:
+    def __init__(self, simulation, *args):
+        self.simulation = simulation
+        self.charts = args
 
-    return max_y if max_y > current_ylim else current_ylim
+        for chart in self.charts:
+            chart.attach(self.simulation)
 
-def calc_lower_ylim(df, columns, current_ylim):
-    min_y = 0
-    for column in columns:
-        if column not in df.columns:
-            continue
-        column_min_y = min(df[column])
-        min_y = column_min_y if column_min_y < min_y else min_y
+    @property
+    def title(self):
+        return ', '.join(hint for i, hint in
+            sorted(bucket_type.hint() for bucket_type in self.simulation.schema if
+                    bucket_type.hint() is not None)
+        )
 
-    return min_y if min_y < current_ylim else current_ylim
+    @classmethod
+    def show(cls, timeline, *args):
+        chart_groups = args
+        stripe_ylimits = {}
+        xlimit = Limit(0, 0)
+        for chart_group in chart_groups:
+            for chart in chart_group.charts:
+                data = chart.data
+                xlimit.set(chart.xlimit.lower, chart.xlimit.upper)
 
-class Limits:
-    xlim = 0
-    yiolim = 0
-    yratelim = 0
-    ypid_integral_lowerlim = 0
-    ypid_integral_upperlim = 0
-    ypid_proportional_lowerlim = 0
-    ypid_proportional_upperlim = 0
+                stripe_ylimit = stripe_ylimits.setdefault(chart.name, Limit())
+                stripe_ylimit.set(chart.ylimit.lower, chart.ylimit.upper)
 
-def set_limits(simulations):
-    bounds = Limits()
-    for member in simulations:
-        max_x = max(member.metric_data.index)
-        bounds.xlim = max_x if max_x > bounds.xlim else bounds.xlim
+        max_nrows = max(len(instance.charts) for instance in chart_groups)
+        ncols = len(chart_groups)
+        width = 11 * ncols
+        height = 5 * max_nrows
 
-        columns = ['completed_not_consumed', 'remaining']
-        bounds.yiolim = calc_upper_ylim(member.metric_data, columns,
-                                        bounds.yiolim)
+        figure = plt.figure(figsize=(width, height))
+        axes = figure.subplots(max_nrows, ncols, squeeze=False)
+        plt.subplots_adjust(bottom=0.1, right=0.8, top=0.9)
 
-        # columns = ['prefetch_rate', 'consumption_rate']
-        # bounds.yratelim = calc_upper_ylim(member.metric_data, columns,
-        # bounds.yratelim)
+        for col, instance in enumerate(chart_groups):
+            for row, chart in enumerate(instance.charts):
+                axes[row][col].set_ylim(
+                    stripe_ylimits[chart.name].lower,
+                    stripe_ylimits[chart.name].upper
+                )
+                axes[row][col].set_xlim(xlimit.lower, xlimit.upper)
+                chart.plot(axes[row][col], timeline)
 
-        columns = ['awd_integral_term', 'cnc_integral_term',
-                    'awd_integral_term_w_coefficient',
-                    'cnc_integral_term_w_coefficient']
-        bounds.ypid_integral_upperlim = calc_upper_ylim(member.metric_data, columns,
-                                                 bounds.ypid_integral_upperlim)
-        bounds.ypid_integral_lowerlim = calc_lower_ylim(member.metric_data, columns,
-                                                 bounds.ypid_integral_lowerlim)
-
-        columns = ['proportional_term', 'proportional_term_w_coefficient']
-        bounds.ypid_proportional_upperlim = calc_upper_ylim(member.metric_data,
-                                                     columns, bounds.ypid_proportional_upperlim)
-        bounds.ypid_proportional_lowerlim = calc_lower_ylim(member.metric_data,
-                                                     columns, bounds.ypid_proportional_lowerlim)
-
-    bounds.ypid_integral_upperlim *= 1.1
-    bounds.ypid_derivative_upperlim *= 1.1
-    bounds.ypid_proportional_upperlim *= 1.1
-    bounds.yratelim *= 1.05
-    bounds.yiolim *= 1.05
-    return bounds
+        for i, chart_group in enumerate(chart_groups):
+            axes[0][i].set_title(chart_group.title)
 
 
+        plt.savefig('current.png')
 
-def dump_plots(simulation, result, storage_name, workload_name, prefetcher_name):
-    directory = f'images/{storage_name}/{workload_name}/'
+class Limit:
+    def __init__(self, lower=None, upper=None):
+        self.lower = lower
+        self.upper = upper
 
-    title_str = ", ".join(hint for i, hint in
-        sorted(bucket_type.hint() for bucket_type in simulation.schema if
-                bucket_type.hint() is not None)
-    )
+    def set_upper(self, val):
+        if self.upper is None:
+            self.upper = val
+            return
+        if self.upper < val:
+            self.upper = val
 
-    figure, axes = plt.subplots(5)
-    figure.set_size_inches(15, 25)
+    def set_lower(self, val):
+        if self.lower is None:
+            self.lower = val
+            return
+        if self.lower > val:
+            self.lower = val
 
-    columns = ['completed_not_consumed', 'remaining']
-    print(result.metric_data)
-    result.metric_data.plot(y=columns, ax=axes[0], title=title_str)
+    def set(self, lower, upper):
+        self.set_lower(lower)
+        self.set_upper(upper)
 
-    axes[1].get_yaxis().set_visible(False)
+    def merge(self, other):
+        limit = Limit()
+        limit.set(other.lower, other.upper)
+        limit.set(self.lower, self.upper)
+        return limit
 
-    columns = ['wait_consume']
-    wait_data = result.metric_data[columns].astype(int)
-    wait_data.plot.area(y=columns, ax=axes[1], stacked=False)
+    def __str__(self):
+        return f'Limit({self.lower}, {self.upper})'
 
-    columns = ['prefetch_rate', 'consumption_rate']
-    result.metric_data.plot(y=columns, ax=axes[2])
+class Chart:
+    plot_type = 'line'
 
-    filename = ChartImage(storage_name, workload_name).parented_path(prefetcher_name)
+    def __init__(self, name, *args, plot_type='line', **kwargs):
+        self.name = name
+        self.ylimit = Limit()
+        self.xlimit = Limit()
+        self.metric_schema = {
+            metric_type.__name__: metric_type() for metric_type in args
+        }
+        self.plot_type = plot_type
+        self.kwargs = kwargs
+        self._data = None
 
-    if prefetcher_name in ['BaselineFetchAll', 'BaselineSync']:
-        plt.savefig(filename)
-        return
+    def attach(self, simulation):
+        simulation.metrics.extend(self.metric_schema.values())
 
-    prop_ax = 3
-    integral_ax = 4
+    @property
+    def data(self):
+        if self._data is None:
+            data = pd.DataFrame()
+            for metric in self.metric_schema.values():
+                data = data.join(metric.data, how='outer')
+            self._data = data
 
-    columns = ['proportional_term', 'proportional_term_w_coefficient']
-    result.metric_data.plot(y=columns, ax=axes[prop_ax])
+            self.xlimit.set(0, max(self._data.index))
+            for column in self._data.columns:
+                self.ylimit.set(min(self._data[column]), max(self._data[column]))
 
-    columns = ['cnc_integral_term', 'cnc_integral_term_w_coefficient']
-    result.metric_data.plot(y=columns, ax=axes[integral_ax])
+        return self._data
 
-    columns = ['awd_integral_term', 'awd_integral_term_w_coefficient']
-    result.metric_data.plot(y=columns, ax=axes[integral_ax])
+    def plot(self, ax, timeline):
+        metric_data = self.data
+        metric_data = metric_data.reindex(metric_data.index.union(metric_data.index[1:] - 1), method='ffill')
 
-
-    plt.savefig(filename)
-
-    # plt.show()
-
-    # if not member.tracer_view.empty:
-    #     member.tracer_view.plot(kind='barh', stacked=True)
-    #     plt.savefig(f'{directory}/{prefetcher_name}_tracer.png')
+        columns = self.metric_schema.keys()
+        getattr(metric_data.plot, self.plot_type)(y=columns, ax=ax, **self.kwargs)
 
