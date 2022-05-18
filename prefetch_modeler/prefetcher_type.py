@@ -1,6 +1,5 @@
 from prefetch_modeler.core import ContinueBucket, GlobalCapacityBucket, RateBucket, \
 Rate, Duration
-from prefetch_modeler.slow_prefetcher import SlowPIDPrefetcher
 from prefetch_modeler.test_prefetcher import ControlPrefetcher
 from prefetch_modeler.piprefetcher import PIPrefetcher
 
@@ -30,18 +29,7 @@ class ConstantPrefetcher(RateBucket):
 
 
 
-class PIDPrefetcher4(SlowPIDPrefetcher):
-    ki = -Rate(per_second=2000).value
-    kp = -0.9
-    kd = -Duration(microseconds=10).total
-    og_rate = Rate(per_second=8000)
 
-class PIDPrefetcher1(SlowPIDPrefetcher):
-    aw_headroom = 8
-    ki = -Rate(per_second=10).value
-    kp = -0.8
-    kd = -Duration(microseconds=2).total
-    og_rate = Rate(per_second=4000)
 
 
 class TestPrefetcher1(ControlPrefetcher):
