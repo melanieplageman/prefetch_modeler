@@ -76,6 +76,10 @@ class PIPrefetcher(RateBucket):
     def rate(self):
         return self.current_rate_value
 
+    @classmethod
+    def hint(cls):
+        return (1, cls.__name__)
+
     @property
     def period(self):
         return self.ledger[-1]
