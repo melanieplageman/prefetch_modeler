@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-import matplotlib.gridspec as gridspec
 
 class ChartGroup:
     def __init__(self, simulation, *args):
