@@ -2,7 +2,7 @@ from prefetch_modeler.storage_type import fast_local1, slow_cloud1
 from prefetch_modeler.workload_type import even_wl, uneven_wl
 from prefetch_modeler.prefetcher_type import piprefetchera
 from prefetch_modeler.core import Duration, Rate, Simulation
-from prefetch_modeler.plot import ChartGroup, Chart
+from plot import ChartGroup, Chart
 from metric import *
 
 
