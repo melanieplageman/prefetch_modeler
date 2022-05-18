@@ -201,7 +201,6 @@ class PIPrefetcher(RateBucket):
 
     @property
     def raw_demand_rate(self):
-        # move_record = list(reversed(self.pipeline['completed'].move_record))
         move_record = list(reversed(self.workload_record))
         intervals = list(zip(move_record, move_record[1:]))
 
@@ -304,27 +303,10 @@ class PIPrefetcher(RateBucket):
         if pc <= 0.0001 and cnc_ic + awd_ic <= 0.01:
             self.cnc_headroom = max(math.ceil(self.cnc_headroom * 0.5), 2)
 
-        backlog_log = f'cnc: {self.completed}. awd: {self.awaiting_dispatch}. cnc headroom: {self.cnc_headroom}. '
-        roc_log = f'cnc_rate: {self.cnc_rate}. awd_rate: {self.awd_rate}. cnc_acc: {self.cnc_acceleration}. awd_acc: {self.awd_acceleration}'
-
         completions = self.lifetime_completes - self.ledger[-1].lt_completed
         clen = self.tick - self.ledger[-1].tick
         if self.lifetime_completes > 1 and completions <= 1:
             self.cnc_headroom = max(self.min_cnc_headroom, math.ceil(self.cnc_headroom * 0.5))
-
-        completion_info_log = f'completions this period: {completions}. period length: {clen}'
-
-        prlog = f'pr: {humanify(prefetch_rate)}. '
-        drlog = f'demand rate: {demand_rate}, {humanify(demand_rate)}. '
-        plog = f'P: {humanify(p)}, PwC: {humanify(pc)}. '
-        cnc_ilog = f'CNC I: {cnc_i}. CNC_IwC: {humanify(cnc_ic)}. '
-        awd_ilog = f'AWD I: {awd_i}. AWD_IwC: {humanify(awd_ic)}. '
-        nprlog = f'new pr: {humanify(new_rate)}. '
-
-        # print(f'Tick: {self.tick}. {backlog_log}')
-        # print(f'Tick: {self.tick}. {roc_log}')
-        # print(f'Tick: {self.tick}. {completion_info_log}')
-        # print(f'Tick: {self.tick}. ' + prlog + drlog + plog + cnc_ilog + awd_ilog + nprlog)
 
         self.ledger.append(LedgerEntry(tick=self.tick,
                                        completed=self.completed,
@@ -334,6 +316,21 @@ class PIPrefetcher(RateBucket):
                                        lt_demanded=self.lifetime_demands,
                                        lt_completed=self.lifetime_completes,
                                        raw_demand_rate=self.raw_demand_rate,))
+
+        completion_info_log = f'completions this period: {completions}. period length: {clen}'
+        backlog_log = f'cnc: {self.completed}. awd: {self.awaiting_dispatch}. cnc headroom: {self.cnc_headroom}. '
+        roc_log = f'cnc_rate: {self.cnc_rate}. awd_rate: {self.awd_rate}. cnc_acc: {self.cnc_acceleration}. awd_acc: {self.awd_acceleration}'
+        prlog = f'pr: {humanify(prefetch_rate)}. '
+        drlog = f'demand rate: {demand_rate}, {humanify(demand_rate)}. '
+        plog = f'P: {humanify(p)}, PwC: {humanify(pc)}. '
+        cnc_ilog = f'CNC I: {cnc_i}. CNC_IwC: {humanify(cnc_ic)}. '
+        awd_ilog = f'AWD I: {awd_i}. AWD_IwC: {humanify(awd_ic)}. '
+        nprlog = f'new pr: {humanify(new_rate)}. '
+        # print(f'Tick: {self.tick}. {backlog_log}')
+        # print(f'Tick: {self.tick}. {roc_log}')
+        # print(f'Tick: {self.tick}. {completion_info_log}')
+        # print(f'Tick: {self.tick}. ' + prlog + drlog + plog + cnc_ilog + awd_ilog + nprlog)
+
 
     def reaction(self):
         if self.pipeline['completed'].info['to_move']:
