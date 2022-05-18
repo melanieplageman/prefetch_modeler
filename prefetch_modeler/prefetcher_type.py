@@ -1,6 +1,5 @@
 from prefetch_modeler.core import ContinueBucket, GlobalCapacityBucket, RateBucket, \
 Rate, Duration
-from prefetch_modeler.test_prefetcher import ControlPrefetcher
 from prefetch_modeler.piprefetcher import PIPrefetcher
 
 
@@ -27,22 +26,6 @@ class ConstantPrefetcher(RateBucket):
     def rate(self):
         return self.og_rate.value
 
-
-
-
-
-
-class TestPrefetcher1(ControlPrefetcher):
-    og_rate = Rate(per_second=6000)
-    sample_period = 200
-    raw_lookback = 2
-    avg_lookback = 2
-
-class ControlPrefetcher2(ControlPrefetcher):
-    og_rate = Rate(per_second=2000)
-    sample_period = 200
-    raw_lookback = 5
-    avg_lookback = 3
 
 class PIPrefetcher1(PIPrefetcher):
     og_rate = Rate(per_second=500)
