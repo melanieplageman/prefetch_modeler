@@ -39,11 +39,8 @@ class LedgerEntry:
     inflight: int
     lt_demanded: int
     lt_completed: int
+    raw_demand_rate: Fraction
 
-@dataclass
-class RateLogItem:
-    tick: int
-    raw_rate: Fraction
 
 def humanify(rate):
     return math.ceil(float(rate) * 1000 * 1000)
@@ -65,11 +62,11 @@ class PIPrefetcher(RateBucket):
     min_cnc_headroom = 3
 
     def __init__(self, *args, **kwargs):
-        self.demand_rate_log = [RateLogItem(tick=0, raw_rate=0)]
-        self.ledger = [LedgerEntry(tick=0, completed=0,
-                                           awaiting_dispatch=0, inflight=0,
-                                           cnc_headroom=self.cnc_headroom,
-                                           lt_demanded=0, lt_completed=0)]
+        self.ledger = [LedgerEntry(tick=0, completed=0, awaiting_dispatch=0,
+                                   inflight=0, cnc_headroom=self.cnc_headroom,
+                                   lt_demanded=0, lt_completed=0,
+                                   raw_demand_rate=0)]
+
         self.current_rate_value = self.og_rate.value
         super().__init__(*args, **kwargs)
         self._rate = self.rate()
@@ -235,17 +232,17 @@ class PIPrefetcher(RateBucket):
             return 0
 
         start_idx = 0
-        for i, entry in enumerate(self.demand_rate_log):
-            if entry.raw_rate != 0:
+        for i, entry in enumerate(self.ledger):
+            if entry.raw_demand_rate != 0:
                 start_idx = i
                 break
 
-        usable_demand_rate_log = self.demand_rate_log[start_idx:]
+        usable_demand_rate_log = self.ledger[start_idx:]
 
         if len(usable_demand_rate_log) < self.avg_lookback:
             return raw_demand_rate
 
-        total = sum([item.raw_rate for item in itertools.islice(reversed(usable_demand_rate_log), self.avg_lookback)])
+        total = sum([item.raw_demand_rate for item in itertools.islice(reversed(usable_demand_rate_log), self.avg_lookback)])
         return Fraction(total, self.avg_lookback)
 
     def run(self, *args, **kwargs):
@@ -329,13 +326,14 @@ class PIPrefetcher(RateBucket):
         # print(f'Tick: {self.tick}. {completion_info_log}')
         # print(f'Tick: {self.tick}. ' + prlog + drlog + plog + cnc_ilog + awd_ilog + nprlog)
 
-        self.demand_rate_log.append(RateLogItem(tick=self.tick, raw_rate=self.raw_demand_rate))
-        self.ledger.append(LedgerEntry(tick=self.tick, completed=self.completed,
-                                           awaiting_dispatch=self.awaiting_dispatch,
+        self.ledger.append(LedgerEntry(tick=self.tick,
+                                       completed=self.completed,
+                                       awaiting_dispatch=self.awaiting_dispatch,
                                        inflight=self.inflight,
-                                           cnc_headroom=self.cnc_headroom,
-                                           lt_demanded=self.lifetime_demands,
-                                       lt_completed=self.lifetime_completes))
+                                       cnc_headroom=self.cnc_headroom,
+                                       lt_demanded=self.lifetime_demands,
+                                       lt_completed=self.lifetime_completes,
+                                       raw_demand_rate=self.raw_demand_rate,))
 
     def reaction(self):
         if self.pipeline['completed'].info['to_move']:
