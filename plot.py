@@ -36,20 +36,18 @@ class ChartGroup:
 
         figure = plt.figure(figsize=(width, height))
         axes = figure.subplots(max_nrows, ncols, squeeze=False)
-        plt.subplots_adjust(bottom=0.1, right=0.8, top=0.9)
 
         for col, instance in enumerate(chart_groups):
             for row, chart in enumerate(instance.charts):
                 axes[row][col].set_ylim(
-                    stripe_ylimits[chart.name].lower,
-                    stripe_ylimits[chart.name].upper
+                    stripe_ylimits[chart.name].lower * 1.08,
+                    stripe_ylimits[chart.name].upper * 1.08
                 )
                 axes[row][col].set_xlim(xlimit.lower, xlimit.upper)
                 chart.plot(axes[row][col], timeline)
 
         for i, chart_group in enumerate(chart_groups):
             axes[0][i].set_title(chart_group.title)
-
 
         plt.savefig('current.png')
 
