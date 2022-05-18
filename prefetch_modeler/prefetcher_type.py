@@ -342,20 +342,3 @@ class PIPrefetcher(RateBucket):
             self.workload_record.append(movement)
             self.adjust()
 
-
-class PIPrefetcher1(PIPrefetcher):
-    og_rate = Rate(per_second=500)
-    raw_lookback = 4
-    avg_lookback = 3
-    awd_lookback = 3
-    kp = 0.5
-    kh = 0.4
-    ki_awd = -Rate(per_second=20).value
-    ki_cnc = -Rate(per_second=20).value
-    cnc_headroom = 50
-    min_cnc_headroom = 15
-
-class PIPrefetcher2(PIPrefetcher1):
-    min_cnc_headroom = 3
-
-piprefetchera = [PIPrefetcher1]
