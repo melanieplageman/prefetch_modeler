@@ -80,16 +80,11 @@ class Limit:
         limit.set(self.lower, self.upper)
         return limit
 
-    def __str__(self):
-        return f'Limit({self.lower}, {self.upper})'
-
 class Chart:
     plot_type = 'line'
 
     def __init__(self, name, *args, plot_type='line', **kwargs):
         self.name = name
-        self.ylimit = Limit()
-        self.xlimit = Limit()
         self.metric_schema = {
             metric_type.__name__: metric_type() for metric_type in args
         }
@@ -107,12 +102,23 @@ class Chart:
             for metric in self.metric_schema.values():
                 data = data.join(metric.data, how='outer')
             self._data = data
-
-            self.xlimit.set(0, max(self._data.index))
-            for column in self._data.columns:
-                self.ylimit.set(min(self._data[column]), max(self._data[column]))
-
         return self._data
+
+    @property
+    def xlimit(self):
+        xlimit = Limit()
+        xlimit.set(0, self._data.index.max(skipna=True))
+        return xlimit
+
+    @property
+    def ylimit(self):
+        ylimit = Limit()
+        for column in self._data.columns:
+            upper = self._data[column].max(skipna=True)
+            lower = self._data[column].min(skipna=True)
+            ylimit.set(lower, upper)
+        return ylimit
+
 
     def plot(self, ax, timeline):
         metric_data = self.data
