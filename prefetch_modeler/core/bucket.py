@@ -49,11 +49,12 @@ class Pipeline:
             for bucket in self.buckets:
                 bucket.run()
 
+            for bucket in self.buckets:
+                bucket.reaction()
+
             for metric in self.metrics:
                 metric.run(self)
 
-            for bucket in self.buckets:
-                bucket.reaction()
             timeline.append(self.tick)
 
             if len(self.buckets[-1]) == len(ios):
