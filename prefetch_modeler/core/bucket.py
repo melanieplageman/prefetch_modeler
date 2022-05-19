@@ -77,8 +77,6 @@ class Pipeline:
             if duration is not None and self.tick > duration.total:
                 break
 
-        return timeline
-
 
 class Bucket(OrderedDict):
     def __init__(self, name):
