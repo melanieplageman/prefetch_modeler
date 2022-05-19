@@ -127,32 +127,10 @@ def test_consumption_rate(self):
     return Rate(per_second=2000).value
 
 even_wl = workload_type('Even Workload', test_consumption_rate,
-                        [])
-
-def consumption_rate_func2(self):
-    if getattr(self, 'tick', 0) <= 5000:
-        return Rate(per_second=2000).value
-    elif getattr(self, 'tick', 0) <= 20000:
-        return Rate(per_second=5000).value
-    else:
-        return Rate(per_second=10000).value
+                        saved_rates_even)
 
 def consumption_rate_func3(self):
     return self.saved_rates.get_rate(getattr(self, 'tick', 0))
-
-def consumption_rate_func4(self):
-    if getattr(self, 'tick', 0) <= 10000:
-        return Rate(per_second=1000).value
-    elif getattr(self, 'tick', 0) <= 50000:
-        return Rate(per_second=500).value
-    elif getattr(self, 'tick', 0) <= 90000:
-        return Rate(per_second=4000).value
-    elif getattr(self, 'tick', 0) <= 102000:
-        return Rate(per_second=1000).value
-    elif getattr(self, 'tick', 0) <= 109000:
-        return Rate(per_second=500).value
-    else:
-        return Rate(per_second=1000).value
 
 def consumption_rate_func6(self):
     return self.saved_rates.get_rate(getattr(self, 'tick', 0))
