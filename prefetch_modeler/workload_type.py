@@ -1,17 +1,11 @@
 from prefetch_modeler.core import RateBucket, StopBucket, Rate, Interval
 from dataclasses import dataclass
 from collections import OrderedDict
+from fractions import Fraction
 import numpy as np
 import math
 import random
-
-@dataclass(kw_only=True)
-class SuperInterval(Interval):
-    completed: int
-    # Note that this is in-progress IOs which are not in flight and not
-    # completed -- waiting to be inflight
-    awaiting_dispatch: int
-    inflight: int
+import pandas as pd
 
 
 class rangerator:
@@ -32,9 +26,8 @@ class rangerator:
 
 
 class SavedRates:
-    _saved_rates = OrderedDict()
-
     def __init__(self, steps, rates, default_rate=1000):
+        self._saved_rates = OrderedDict()
         self.default_rate = default_rate
         self.ranges = rangerator(steps).ranges
         self.rates = rates
@@ -70,6 +63,15 @@ class SavedRates:
             if tick in r[0]:
                 return Rate(per_second=math.ceil(r[1])).value
         return Rate(per_second=math.ceil(self.default_rate)).value
+
+    def next_range_start(self, tick):
+        current_range_start = self.current_range_idx(tick)
+
+        if current_range_start is None:
+            return None
+        if current_range_start + 1 >= len(self.rates):
+            return None
+        return self.ranges[current_range_start + 1].start + 1
 
 
 class SineRaterator:
