@@ -111,14 +111,16 @@ def workload_type(hint, consumption_rate_func, saved_rates):
             # the lower bound of the next range in the ranges array
             # the min of that and super next_action
             next_action = super().next_action()
-            current_range_start = self.saved_rates.current_range_idx(self.tick)
-            if current_range_start is None:
+            if self.saved_rates is None:
                 return next_action
-            if current_range_start + 1 >= len(self.saved_rates.rates):
-                return next_action
-            next_range_start = self.saved_rates.ranges[current_range_start + 1].start + 1
+            next_range_start = self.saved_rates.next_range_start(self.tick)
+            if next_range_start is None:
+                result = next_action
             # print(f'tick: {self.tick}. next_range_start: {next_range_start}. next_action: {next_action}')
-            return min(next_range_start, next_action)
+            else:
+                result = min(next_range_start, next_action)
+            return result
+
 
     class consumed(StopBucket):
         pass
@@ -126,13 +128,9 @@ def workload_type(hint, consumption_rate_func, saved_rates):
     return [completed, consumed]
 
 def test_consumption_rate(self):
-    return Rate(per_second=2000).value
+    return Rate(per_second=2500).value
 
-even_wl = workload_type('Even Workload', test_consumption_rate,
-                        saved_rates_even)
-
-def consumption_rate_func3(self):
-    return self.saved_rates.get_rate(getattr(self, 'tick', 0))
+even_wl = workload_type('Even Workload', test_consumption_rate, None)
 
 def consumption_rate_func6(self):
     return self.saved_rates.get_rate(getattr(self, 'tick', 0))
@@ -142,13 +140,11 @@ rates = [1000, 3000, 2000]
 default_rate = 1400
 saved_rates_reg1 = SavedRates(steps, rates, default_rate)
 
-uneven_wl = workload_type('Uneven Workload', consumption_rate_func3,
-                          saved_rates_reg1)
+uneven_wl = workload_type('Uneven Workload', consumption_rate_func6, saved_rates_reg1)
 
 steps = [2000, 5000, 200, 4444, 22, 10000, 35678, 2000, 10000, 200]
 rates = SineRaterator(rangerator(steps).ranges).rates
-default_rate = 1000
+default_rate = 2000
 saved_rates_sine1 = SavedRates(steps, rates, default_rate)
 
-uneven_wl = workload_type('Uneven Workload', consumption_rate_func6,
-                          saved_rates_sine1)
+uneven_wl = workload_type('Uneven Workload', consumption_rate_func6, saved_rates_sine1)
