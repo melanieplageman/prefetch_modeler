@@ -154,37 +154,6 @@ def consumption_rate_func4(self):
     else:
         return Rate(per_second=1000).value
 
-def consumption_rate_func5(self):
-
-    class Consumerator:
-        step = 5111
-        steps = [2000, 5000, 200, 4444, 22, 10000, 35678, 2000, 10000, 200]
-        step_idx = 0
-        amplitude = 1000
-        per_second = 1000
-
-        period = 10000
-
-        def __init__(self):
-            self.next_change = self.steps[self.step_idx]
-
-        def next(self, tick):
-            if tick >= self.next_change:
-                # Normally, sin() has a period of 2 * pi. If you don't divide
-                # by anything, then this is a wave that oscillates ever 6
-                # ticks,
-                self.per_second = math.ceil((np.sin(tick / self.period) + 1) * self.amplitude)
-                self.step_idx = (self.step_idx + 1) % len(self.steps)
-                self.next_change = tick + self.steps[self.step_idx]
-            return Rate(per_second=self.per_second).value
-
-    if self.consumerator is None:
-        self.consumerator = Consumerator()
-
-    tick = getattr(self, 'tick', 0)
-    rate = self.consumerator.next(tick)
-    return rate
-
 def consumption_rate_func6(self):
     return self.saved_rates.get_rate(getattr(self, 'tick', 0))
 
