@@ -93,8 +93,6 @@ class SineRaterator:
 
 def workload_type(hint, consumption_rate_func, saved_rates):
     class completed(RateBucket):
-        cnc_headroom = 2
-
         def __init__(self, *args, **kwargs):
             self.consumerator = None
             self.saved_rates = saved_rates

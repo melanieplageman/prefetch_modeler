@@ -222,6 +222,8 @@ class PIPrefetcher(RateBucket):
         if time_elapsed == 0:
             raw_rate = 0
         else:
+            # print(f'number_moved: {number_moved}. time_elapsed: {time_elapsed}. headroom: {self.cnc_headroom}')
+            # raw_rate = Fraction(number_moved + self.cnc_headroom, time_elapsed)
             raw_rate = Fraction(number_moved, time_elapsed)
 
         # print(f'raw demand rate: {raw_rate}')
@@ -276,6 +278,11 @@ class PIPrefetcher(RateBucket):
         awd_sq = self.awaiting_dispatch * self.awaiting_dispatch
         return awd_sq
 
+    def alt_awd_term(self):
+        latency_log = self.pipeline['completed'].log
+        print(latency_log)
+
+
     def adjust(self):
         demand_rate = self.demand_rate
         prefetch_rate = self.rate()
@@ -294,23 +301,22 @@ class PIPrefetcher(RateBucket):
 
         if self.completed < self.cnc_headroom and self.recent_awd > 0:
             adjustment = self.recent_awd * self.kh
-            self.cnc_headroom = max(self.min_cnc_headroom, math.ceil(self.cnc_headroom - adjustment))
+            # self.cnc_headroom = max(self.min_cnc_headroom, math.ceil(self.cnc_headroom - adjustment))
 
         new_rate = prefetch_rate
-        new_rate += pc
-        new_rate += cnc_ic
-        new_rate += awd_ic
+        # new_rate += pc
+        # new_rate += cnc_ic
+        # new_rate += awd_ic
         if new_rate < 0:
             new_rate = 0
-        self.current_rate_value = new_rate
 
-        if pc <= 0.0001 and cnc_ic + awd_ic <= 0.01:
-            self.cnc_headroom = max(math.ceil(self.cnc_headroom * 0.5), 2)
+        # if pc <= 0.0001 and cnc_ic + awd_ic <= 0.01:
+        #     self.cnc_headroom = max(math.ceil(self.cnc_headroom * 0.5), 2)
 
         completions = self.lifetime_completes - self.ledger[-1].lt_completed
         clen = self.tick - self.ledger[-1].tick
-        if self.lifetime_completes > 1 and completions <= 1:
-            self.cnc_headroom = max(self.min_cnc_headroom, math.ceil(self.cnc_headroom * 0.5))
+        # if self.lifetime_completes > 1 and completions <= 1:
+        #     self.cnc_headroom = max(self.min_cnc_headroom, math.ceil(self.cnc_headroom * 0.5))
 
         self.ledger.append(LedgerEntry(tick=self.tick,
                                        completed=self.completed,
