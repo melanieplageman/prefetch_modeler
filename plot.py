@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
+import math
 
 class ChartGroup:
     def __init__(self, simulation, *args):
@@ -24,6 +25,7 @@ class ChartGroup:
         for chart_group in chart_groups:
             for chart in chart_group.charts:
                 data = chart.data
+                print(data)
                 xlimit.set(chart.xlimit.lower, chart.xlimit.upper)
 
                 stripe_ylimit = stripe_ylimits.setdefault(chart.name, Limit())

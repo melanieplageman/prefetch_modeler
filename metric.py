@@ -5,6 +5,50 @@ def metric(function):
     metric_type = type(Metric)(function.__name__, (Metric,), {"function": staticmethod(function)})
     return metric_type
 
+@metric
+def storage_rate(pipeline):
+    return float(pipeline['newfetcher'].raw_storage_rate)
+
+@metric
+def io_latency(pipeline):
+    latency = pipeline['newfetcher'].period.latency
+    if latency == 0:
+        return None
+    return latency
+
+@metric
+def storage_rate_change(pipeline):
+    return float(pipeline['newfetcher'].storage_rate_change)
+
+@metric
+def latency_change(pipeline):
+    return float(pipeline['newfetcher'].latency_change)
+
+@metric
+def in_storage(pipeline):
+    return inflight.function(pipeline) + submitted.function(pipeline)
+
+@metric
+def io_ratio(pipeline):
+    latency = io_latency.function(pipeline)
+    if latency is None or latency == 0:
+        return None
+    return in_storage.function(pipeline) / latency
+
+@metric
+def storage_latency_ratio(pipeline):
+    lchange = latency_change.function(pipeline)
+    if lchange is None or lchange == 0:
+        return None
+    return storage_rate_change.function(pipeline) / lchange
+
+@metric
+def storage_latency_ratio2(pipeline):
+    latency = io_latency.function(pipeline)
+    if latency is None or latency == 0:
+        return None
+    completed_rate = pipeline['newfetcher'].raw_storage_rate
+    return float(completed_rate / latency)
 
 @metric
 def completed_not_consumed(pipeline):
