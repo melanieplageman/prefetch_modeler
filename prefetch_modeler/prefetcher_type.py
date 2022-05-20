@@ -40,6 +40,7 @@ class LedgerEntry:
     lt_demanded: int
     lt_completed: int
     raw_demand_rate: Fraction
+    prefetch_rate: Rate
 
 
 def humanify(rate):
@@ -65,16 +66,15 @@ class PIPrefetcher(RateBucket):
         self.ledger = [LedgerEntry(tick=0, completed=0, awaiting_dispatch=0,
                                    inflight=0, cnc_headroom=self.cnc_headroom,
                                    lt_demanded=0, lt_completed=0,
-                                   raw_demand_rate=0)]
+                                   raw_demand_rate=0,
+                                   prefetch_rate=self.og_rate.value)]
 
-        self.current_rate_value = self.og_rate.value
         super().__init__(*args, **kwargs)
-        self._rate = self.rate()
         print(f"Initial Rate: {self._rate} {float(self._rate)}")
         self.workload_record = []
 
     def rate(self):
-        return self.current_rate_value
+        return self.period.prefetch_rate
 
     @classmethod
     def hint(cls):
@@ -319,7 +319,8 @@ class PIPrefetcher(RateBucket):
                                        cnc_headroom=self.cnc_headroom,
                                        lt_demanded=self.lifetime_demands,
                                        lt_completed=self.lifetime_completes,
-                                       raw_demand_rate=self.raw_demand_rate,))
+                                       raw_demand_rate=self.raw_demand_rate,
+                                       prefetch_rate=new_rate))
 
         completion_info_log = f'completions this period: {completions}. period length: {clen}'
         backlog_log = f'cnc: {self.completed}. awd: {self.awaiting_dispatch}. cnc headroom: {self.cnc_headroom}. '
