@@ -35,30 +35,42 @@ class ChartGroup:
         ncols = len(chart_groups)
         width = 11 * ncols
         height = 5 * max_nrows
+        print(stripe_ylimits)
 
         figure = plt.figure(figsize=(width, height))
         axes = figure.subplots(max_nrows, ncols, squeeze=False)
 
         for col, instance in enumerate(chart_groups):
             for row, chart in enumerate(instance.charts):
-                axes[row][col].set_ylim(
-                    stripe_ylimits[chart.name].lower * 1.08,
-                    stripe_ylimits[chart.name].upper * 1.08
-                )
+                lower = stripe_ylimits[chart.name].lower
+                upper = stripe_ylimits[chart.name].upper
+                lower = lower - (lower * .1) if lower is not None else lower
+                upper = upper * 1.1 if upper is not None else upper
+                axes[row][col].set_ylim(lower, upper)
                 axes[row][col].set_xlim(xlimit.lower, xlimit.upper)
                 chart.plot(axes[row][col], timeline)
 
         for i, chart_group in enumerate(chart_groups):
             axes[0][i].set_title(chart_group.title)
 
+        # plt.show()
         plt.savefig('current.png')
 
 class Limit:
     def __init__(self, lower=None, upper=None):
+        if lower is not None and math.isnan(lower):
+            lower = None
+        if upper is not None and math.isnan(upper):
+            upper = None
         self.lower = lower
         self.upper = upper
 
+    def __repr__(self):
+        return f'Limit({self.lower!r}, {self.upper!r})'
+
     def set_upper(self, val):
+        if val is not None and math.isnan(val):
+            return
         if self.upper is None:
             self.upper = val
             return
@@ -66,6 +78,8 @@ class Limit:
             self.upper = val
 
     def set_lower(self, val):
+        if val is not None and math.isnan(val):
+            return
         if self.lower is None:
             self.lower = val
             return
@@ -124,6 +138,7 @@ class Chart:
 
     def plot(self, ax, timeline):
         metric_data = self.data
+        print(metric_data)
         metric_data = metric_data.reindex(metric_data.index.union(metric_data.index[1:] - 1), method='ffill')
 
         columns = self.metric_schema.keys()
