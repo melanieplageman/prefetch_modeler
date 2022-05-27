@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import pandas as pd
 from prefetch_modeler.core import IO, Tracer, Pipeline
 from typing import List
+from collections import OrderedDict
 
 
 class Metric:
@@ -51,6 +52,23 @@ class Simulation:
             .pivot(index='io', columns='bucket', values='interval') \
             .reindex(bucket_sequence, axis='columns', fill_value=0)
 
+        inflight_scores = OrderedDict(sorted(pipeline['newfetcher'].inflight_scores.items()))
+
+        max_inflight = 0
+        seen_lo = False
+        for inflight, scores in inflight_scores.items():
+            print(f'In Storage: {inflight}. HI: {scores[0]} LO: {scores[1]}')
+        for inflight, scores in inflight_scores.items():
+            his = scores[0]
+            los = scores[1]
+            if los > 0 and not seen_lo:
+                seen_lo = True
+                continue
+            if seen_lo and his > los:
+                max_inflight = inflight
+                break
+
+        print(max_inflight)
         return SimulationResult(timeline, tracer_data)
 
 @dataclass(frozen=True)

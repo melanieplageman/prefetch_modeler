@@ -126,23 +126,23 @@ def workload_type(hint, consumption_rate_func, saved_rates):
     return [completed, consumed]
 
 def test_consumption_rate(self):
-    return Rate(per_second=2500).value
+    return Rate(per_second=2100).value
 
 even_wl = workload_type('Even Workload', test_consumption_rate, None)
 
 def consumption_rate_func6(self):
     return self.saved_rates.get_rate(getattr(self, 'tick', 0))
 
-steps = [10000, 10000, 100000]
+steps = [50000, 100000, 90000]
 rates = [1000, 3000, 2000]
 default_rate = 1400
 saved_rates_reg1 = SavedRates(steps, rates, default_rate)
 
-uneven_wl = workload_type('Uneven Workload', consumption_rate_func6, saved_rates_reg1)
+uneven_wl1 = workload_type('Uneven Workload', consumption_rate_func6, saved_rates_reg1)
 
 steps = [2000, 5000, 200, 4444, 22, 10000, 35678, 2000, 10000, 200]
 rates = SineRaterator(rangerator(steps).ranges).rates
 default_rate = 2000
 saved_rates_sine1 = SavedRates(steps, rates, default_rate)
 
-uneven_wl = workload_type('Uneven Workload', consumption_rate_func6, saved_rates_sine1)
+uneven_wl2 = workload_type('Uneven Workload', consumption_rate_func6, saved_rates_sine1)

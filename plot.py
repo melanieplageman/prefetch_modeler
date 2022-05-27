@@ -44,8 +44,15 @@ class ChartGroup:
             for row, chart in enumerate(instance.charts):
                 lower = stripe_ylimits[chart.name].lower
                 upper = stripe_ylimits[chart.name].upper
-                lower = lower - (lower * .1) if lower is not None else lower
-                upper = upper * 1.1 if upper is not None else upper
+                if lower is not None and lower < 0:
+                    lower = lower * 1.15
+                elif lower is not None and lower > 0:
+                    lower = lower * 0.85
+                elif lower is not None and lower == 0:
+                    lower = 0
+                else:
+                    lower = None
+                upper = upper * 1.15 if upper is not None else upper
                 axes[row][col].set_ylim(lower, upper)
                 axes[row][col].set_xlim(xlimit.lower, xlimit.upper)
                 chart.plot(axes[row][col], timeline)

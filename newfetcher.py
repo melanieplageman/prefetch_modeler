@@ -1,6 +1,7 @@
 from prefetch_modeler.core import RateBucket, Rate
 from dataclasses import dataclass
 from fractions import Fraction
+import itertools
 import math
 
 @dataclass
@@ -9,6 +10,7 @@ class LogItem:
     in_storage: int
     latency: float
     prefetch_rate: Rate
+    raw_storage_rate: Rate
     storage_rate: Rate
 
 from collections import namedtuple
@@ -21,9 +23,10 @@ class NewFetcher(RateBucket):
         self.og_rate = Rate(per_second=2000)
         self.storage_record = []
         self.raw_lookback = 4
+        self.avg_lookback = 3
         self.log = [LogItem(tick=0, in_storage=0, latency=0,
                             prefetch_rate=self.og_rate.value,
-                            storage_rate=0)]
+                            raw_storage_rate=0, storage_rate=0)]
 
         super().__init__(*args, **kwargs)
         self._rate = self.rate()
@@ -68,8 +71,26 @@ class NewFetcher(RateBucket):
         older_latency = math.ceil(period_older.latency)
         newer_latency = math.ceil(period_newer.latency)
         result = Fraction(newer_latency - older_latency, length)
-        print(f'result is {result}')
         return result
+
+    @property
+    def latency_derivative(self):
+        if len(self.log) < 3:
+            return 0
+
+        newest = self.log[-1]
+        mid = self.log[-2]
+        oldest = self.log[-3]
+
+        length_newer = newest.tick - mid.tick
+        newer_dt = Fraction(math.ceil(newest.latency) - math.ceil(mid.latency),
+                            length_newer)
+
+        length_older = mid.tick - oldest.tick
+        older_dt = Fraction(math.ceil(mid.latency) - math.ceil(oldest.latency),
+                            length_older)
+
+        return Fraction(newer_dt - older_dt, length_newer + length_older)
 
     @property
     def storage_rate_change(self):
@@ -81,7 +102,7 @@ class NewFetcher(RateBucket):
 
         length = period_newer.tick - period_older.tick
 
-        return Fraction(period_newer.storage_rate - period_older.storage_rate, length)
+        return Fraction(period_newer.raw_storage_rate - period_older.raw_storage_rate, length)
 
     @property
     def raw_storage_rate(self):
@@ -106,14 +127,43 @@ class NewFetcher(RateBucket):
 
         return raw_rate
 
-    def reaction(self):
-        for io in self.pipeline['submitted']:
-            if getattr(io, 'submitted', None) is not None:
-                continue
-            io.submitted = self.tick
+    @property
+    def storage_rate(self):
+        raw_storage_rate = self.raw_storage_rate
 
+        if raw_storage_rate == 0:
+            return 0
+
+        start_idx = 0
+        for i, entry in enumerate(self.log):
+            if entry.raw_storage_rate != 0:
+                start_idx = i
+                break
+
+        usable_storage_rate_log = self.log[start_idx:]
+
+        if len(usable_storage_rate_log) < self.avg_lookback:
+            return raw_storage_rate
+
+        total = sum([item.raw_storage_rate for item in itertools.islice(reversed(usable_storage_rate_log), self.avg_lookback)])
+        return Fraction(total, self.avg_lookback)
+
+    def adjust(self):
+        fetch_rate = self.rate()
+        lat_dt = self.latency_derivative
+        lat_term = lat_dt *  10
+        new_rate = fetch_rate + lat_dt
+        lat_log = f'latency derivative: {lat_dt}. '
+        fetch_log = f'fetch rate: {float(fetch_rate)}. new fetch rate: {float(new_rate)}. '
+        print(f'Tick: {self.tick}' + lat_log + fetch_log)
+        self.log[-1].prefetch_rate = new_rate
+
+        # print(f'Tick: {self.tick}. latency change: {lat}')
+
+    def reaction(self):
         # In case the IO is moved immediately to the inflight bucket
-        for io in self.pipeline['inflight']:
+        for io in itertools.chain(self.pipeline['submitted'],
+                                  self.pipeline['inflight']):
             if getattr(io, 'submitted', None) is not None:
                 continue
             io.submitted = self.tick
@@ -142,11 +192,21 @@ class NewFetcher(RateBucket):
             return
 
         if self.pipeline['inflight'].info['to_move']:
-            movement = Movement(self.tick, self.pipeline['inflight'].info['to_move'])
+            movement = Movement(self.tick,
+                                self.pipeline['inflight'].info['to_move'])
             self.storage_record.append(movement)
 
+        # print(total_latency)
         self.log.append(LogItem(tick=self.tick,
                                 in_storage=self.in_storage,
                                 latency=float(total_latency / num_ios),
                                 prefetch_rate=self.rate(),
-                                storage_rate=self.raw_storage_rate,))
+                                raw_storage_rate=self.raw_storage_rate,
+                                storage_rate=self.storage_rate))
+        self.adjust()
+
+class ConstantFetcher(NewFetcher):
+    def rate(self):
+        if getattr(self, 'pipeline', None) is not None:
+            return self.pipeline['remaining'].rate()
+        return 0

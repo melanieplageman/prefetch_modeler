@@ -6,6 +6,18 @@ def metric(function):
     return metric_type
 
 @metric
+def prefetch_rate_limit(pipeline):
+    return float(pipeline['newfetcher'].rate())
+
+@metric
+def raw_demand_rate(pipeline):
+    return float(pipeline['remaining'].raw_demand_rate)
+
+@metric
+def storage_capacity(pipeline):
+    return pipeline['submitted'].target_capacity()
+
+@metric
 def storage_rate(pipeline):
     return float(pipeline['newfetcher'].raw_storage_rate)
 
@@ -17,16 +29,54 @@ def io_latency(pipeline):
     return latency
 
 @metric
+def base_latency_estimate(pipeline):
+    return pipeline['newfetcher'].regression
+
+# @metric
+# def prop(pipeline):
+#     return float(pipeline['remaining'].proportional_term)
+
+# @metric
+# def cnc_integral(pipeline):
+#     return float(pipeline['remaining'].cnc_integral_term)
+
+@metric
+def lat_derivative(pipeline):
+    latdt = float(pipeline['newfetcher'].latency_derivative)
+    if latdt == 0:
+        return None
+    return latdt
+
+@metric
+def gain(pipeline):
+    return pipeline['newfetcher'].recent_gain
+
+@metric
+def adjustment(pipeline):
+    return float(pipeline['newfetcher'].adjustment)
+
+@metric
+def lat_integral(pipeline):
+    return float(pipeline['newfetcher'].integral_term)
+
+@metric
 def storage_rate_change(pipeline):
     return float(pipeline['newfetcher'].storage_rate_change)
 
 @metric
-def latency_change(pipeline):
-    return float(pipeline['newfetcher'].latency_change)
+def latency_rate_of_change(pipeline):
+    return float(pipeline['newfetcher'].latency_rate)
+
+@metric
+def submitted(pipeline):
+    return len(pipeline['submitted'])
 
 @metric
 def in_storage(pipeline):
-    return inflight.function(pipeline) + submitted.function(pipeline)
+    return len(pipeline['minimum_latency']) + \
+           len(pipeline['inflight']) + \
+           len(pipeline['deadline'])
+    return len(pipeline['submitted']) + len(pipeline['inflight'])
 
 @metric
 def io_ratio(pipeline):
@@ -39,8 +89,11 @@ def io_ratio(pipeline):
 def storage_latency_ratio(pipeline):
     lchange = latency_change.function(pipeline)
     if lchange is None or lchange == 0:
-        return None
-    return storage_rate_change.function(pipeline) / lchange
+        return 0
+    srchange = storage_rate_change.function(pipeline)
+    if srchange == 0:
+        return 0
+    return srchange / lchange
 
 @metric
 def storage_latency_ratio2(pipeline):
@@ -58,6 +111,10 @@ def completed_not_consumed(pipeline):
 def remaining(pipeline):
     return len(pipeline['remaining'])
 
+# @metric
+# def remaining(pipeline):
+#     return len(pipeline['remaining']) + len(pipeline['newfetcher'])
+
 @metric
 def done(pipeline):
     return len(pipeline['consumed'])
@@ -65,6 +122,24 @@ def done(pipeline):
 @metric
 def cnc_headroom(pipeline):
     return pipeline['remaining'].cnc_headroom
+
+@metric
+def raw_completion_rate(pipeline):
+    raw = pipeline['newfetcher'].raw_completion_rate
+    return float(raw)
+
+@metric
+def completion_inflight_ratio(pipeline):
+    completion = pipeline['newfetcher'].raw_completion_rate
+    in_storage = pipeline['newfetcher'].in_storage_rate
+    if in_storage <= 0:
+        return None
+    return completion / in_storage
+
+@metric
+def in_storage_rate(pipeline):
+    in_storage_rate = pipeline['newfetcher'].in_storage_rate
+    return in_storage_rate
 
 @metric
 def awaiting_dispatch(pipeline):
@@ -98,10 +173,6 @@ def do_consume(pipeline):
     return pipeline['completed'].info['to_move']
 
 @metric
-def do_consume(pipeline):
-    return pipeline['awaiting_buffer'].info['to_move']
-
-@metric
 def num_ios_w_buffer(pipeline):
     return len(pipeline['w_claimed_buffer'])
 
@@ -132,6 +203,7 @@ def prefetch_rate(pipeline):
 
 @metric
 def max_iops(pipeline):
+    return float(pipeline['inflight'].rate())
     return float(pipeline['submitted'].storage_speed)
 
 
