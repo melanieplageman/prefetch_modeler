@@ -1,5 +1,6 @@
 from prefetch_modeler.core import DialBucket, TargetCapacityBucket, \
-    ThresholdBucket, GlobalCapacityBucket, Rate, Duration
+    ThresholdBucket, GlobalCapacityBucket, Rate, Duration, ContinueBucket, \
+    RateBucket, DeadlineBucket
 
 
 def io_uring(hint,
@@ -70,7 +71,38 @@ def simple_storage(hint,
         def latency(self):
             return completion_latency_func(self)
 
+        def add(self, *args, **kwargs):
+            print(f"Tick: {self.tick}, IO Added")
+            super().add(*args, **kwargs)
+
     return [submitted, inflight]
+
+
+def simple_storage2(hint,
+                 max_buffers,
+                 kernel_invoke_batch_size,
+                 submission_overhead_func,
+                 completion_latency_func,
+                 max_iops):
+
+    class minimum_latency(ContinueBucket):
+        def add(self, io):
+            io.move_at = self.tick + self.latency()
+            super().add(io)
+
+        def latency(self):
+            return completion_latency_func(self)
+
+    class inflight(RateBucket):
+        def rate(self):
+            # if self.tick <= 100000:
+            #     return max_iops * 0.5
+            return max_iops
+
+    class deadline(DeadlineBucket):
+        pass
+
+    return [minimum_latency, inflight, deadline]
 
 
 def submission_latency(self):
@@ -91,16 +123,7 @@ fast_local1 = simple_storage(
 def cloud_storage_latency(self):
     return int(Duration(milliseconds=3).total)
 
-slow_cloud2 = simple_storage(
-    'Cloud Storage',
-    max_buffers = 200,
-    kernel_invoke_batch_size = 1,
-    submission_overhead_func = submission_latency,
-    completion_latency_func = cloud_storage_latency,
-    max_iops=Rate(per_second=2000).value,
-)
-
-slow_cloud1 = simple_storage(
+slow_cloud1 = simple_storage2(
     'Cloud Storage',
     max_buffers = 200,
     kernel_invoke_batch_size = 1,

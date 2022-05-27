@@ -19,21 +19,12 @@ class GateBucket(Bucket):
         return frozenset(itertools.islice(self.source, size))
 
 
-class DialBucket(Bucket):
-    """A bucket that will retain each IO for a specified amount of time."""
-
-    def add(self, io):
-        # In case self.tick is None
-        io.move_at = (self.tick or 0) + self.latency()
-        super().add(io)
+class DeadlineBucket(Bucket):
+    """A bucket that will retain each IO through a certain deadline."""
 
     def remove(self, io):
         del io.move_at
         super().remove(io)
-
-    def latency(self):
-        """The amount of time that an IO should be retained in this bucket."""
-        raise NotImplementedError()
 
     def next_action(self):
         if not self.source:
@@ -42,6 +33,19 @@ class DialBucket(Bucket):
 
     def to_move(self):
         return frozenset(io for io in self.source if io.move_at <= self.tick)
+
+
+class DialBucket(DeadlineBucket):
+    """A bucket that will retain each IO for a specified amount of time."""
+
+    def add(self, io):
+        # In case self.tick is None
+        io.move_at = (self.tick or 0) + self.latency()
+        super().add(io)
+
+    def latency(self):
+        """The amount of time that an IO should be retained in this bucket."""
+        raise NotImplementedError()
 
 
 class ContinueBucket(Bucket):
@@ -63,10 +67,9 @@ class StopBucket(Bucket):
 
 class RateBucket(Bucket):
     def __init__(self, *args, **kwargs):
-        self._rate = self.rate()
-        self.volume = self.maximum_volume
+        self._rate = None
+        self.volume = None
         self.last_tick = 0
-        self.demanded = 0
         super().__init__(*args, **kwargs)
 
     def rate(self):
@@ -80,6 +83,12 @@ class RateBucket(Bucket):
         return math.ceil(math.ceil(self._rate) / self._rate) * self._rate
 
     def to_move(self):
+        if self._rate is None:
+            self._rate = self.rate()
+
+        if self.volume is None:
+            self.volume = self.maximum_volume
+
         if self.rate() == 0:
             self.volume = 0
         else:
@@ -87,8 +96,6 @@ class RateBucket(Bucket):
             self.volume = min(self.volume, self.maximum_volume)
 
         moveable = max(math.floor(self.volume), 0)
-
-        self.demanded += moveable
 
         self.info['want_to_move'] = moveable
 
@@ -213,7 +220,9 @@ class TargetCapacityBucket(CapacityBucket):
 
     def slack(self):
         # Target num_ios should not exceed target capacity
-        return max(self.target_capacity() - len(self.target), 0)
+        slack = max(self.target_capacity() - len(self.target), 0)
+        # print(slack)
+        return slack
 
 
 class GlobalCapacityBucket(CapacityBucket):
