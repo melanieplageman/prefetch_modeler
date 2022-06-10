@@ -57,7 +57,6 @@ class NewFetcher(RateBucket):
     def in_storage(self):
         return self.in_progress - self.completed - len(self)
 
-    # TODO: refactor
     @property
     def latency_change(self):
         if len(self.log) < 2:

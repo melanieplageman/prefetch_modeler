@@ -126,7 +126,7 @@ def workload_type(hint, consumption_rate_func, saved_rates):
     return [completed, consumed]
 
 def test_consumption_rate(self):
-    return Rate(per_second=2100).value
+    return Rate(per_second=3100).value
 
 even_wl = workload_type('Even Workload', test_consumption_rate, None)
 

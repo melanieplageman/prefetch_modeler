@@ -277,28 +277,31 @@ class NewFetcher(RateBucket):
             ('up', 'up') : 'high',
             ('up', 'down'): 'high',
             ('up', 'same'): 'high',
-            ('down', 'up'): 'low',
+            ('down', 'up'): 'high',
             ('down', 'down'): 'high',
-            ('down', 'same'): 'low',
-            ('same', 'up'): 'low',
+            ('down', 'same'): 'high',
+            ('same', 'up'): 'high',
             ('same', 'down'): 'low',
             ('same', 'same'): 'high',
         }
 
         lat_direction = 'same'
-        diff = avg_latency - self.period.latency
-        print(f'diff: {diff}')
+        lat_diff = avg_latency - self.period.latency
         # print(f'avg_latency {avg_latency} > previous latency {self.period.latency}')
-        if avg_latency > (self.period.latency * 1.04):
+        if avg_latency > (self.period.latency * 1.08):
             lat_direction = 'up'
-        elif avg_latency < (self.period.latency * 0.95):
+        elif avg_latency < (self.period.latency * 0.8):
             lat_direction = 'down'
 
         inflight_direction = 'same'
-        if self.in_storage > self.period.in_storage:
+        if self.in_storage > (self.period.in_storage * 1.08):
             inflight_direction = 'up'
-        elif self.in_storage < self.period.in_storage:
+        elif self.in_storage < (self.period.in_storage * 0.8):
             inflight_direction = 'down'
+
+        lat_log = f'previous lat: {self.period.latency}. lat: {avg_latency}. lat_diff: {lat_diff}.'
+        inflight_log = f'previous inflight: {self.period.in_storage}. inflight: {self.in_storage}.'
+        print(f'Tick: {self.tick}: {lat_log} {inflight_log}')
 
 
         # (hi, lo)
@@ -307,9 +310,9 @@ class NewFetcher(RateBucket):
         his = self.inflight_scores[self.in_storage][0]
         los = self.inflight_scores[self.in_storage][1]
         if latency_ios[(lat_direction, inflight_direction)] == 'high':
-            his += 1
+            his += lat_diff
         else:
-            los += 1
+            los += lat_diff
 
         self.inflight_scores[self.in_storage] = (his, los)
         # print(self.inflight_scores)
@@ -317,13 +320,22 @@ class NewFetcher(RateBucket):
         inflight_scores = OrderedDict(sorted(self.inflight_scores.items()))
 
         max_inflight = 0
-        seen_lo = False
+        current_max_diff = 0
+        current_max_score = 0
         for inflight, scores in inflight_scores.items():
             his = scores[0]
             los = scores[1]
-            if his > los:
+            if his > current_max_score:
+                current_max_score = his
                 max_inflight = inflight
-                break
+            # diff = his - los
+            # if diff > current_max_diff:
+            #     current_max_diff = diff
+            #     max_inflight = inflight
+
+            # if his > 0:
+            #     max_inflight = inflight
+            #     break
 
         inflights = list(inflight_scores.keys())
         for i, key in enumerate(inflights):

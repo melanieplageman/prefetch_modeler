@@ -70,10 +70,14 @@ class PIPrefetcher(RateBucket):
                                    prefetch_rate=self.og_rate.value)]
 
         super().__init__(*args, **kwargs)
-        print(f"Initial Rate: {self._rate} {float(self._rate)}")
+        # print(f"{self}. Initial Rate: {self._rate} {float(self._rate)}")
         self.workload_record = []
 
     def rate(self):
+        # if getattr(self, 'pipeline', None) is not None and self.tick >= 40000:
+        #     return Rate(per_second=1100).value
+        # if getattr(self, 'pipeline', None) is not None and self.tick >= 60000:
+        #     return Rate(per_second=6000).value
         return self.period.prefetch_rate
 
     @classmethod

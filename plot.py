@@ -25,7 +25,6 @@ class ChartGroup:
         for chart_group in chart_groups:
             for chart in chart_group.charts:
                 data = chart.data
-                print(data)
                 xlimit.set(chart.xlimit.lower, chart.xlimit.upper)
 
                 stripe_ylimit = stripe_ylimits.setdefault(chart.name, Limit())
@@ -35,7 +34,6 @@ class ChartGroup:
         ncols = len(chart_groups)
         width = 11 * ncols
         height = 5 * max_nrows
-        print(stripe_ylimits)
 
         figure = plt.figure(figsize=(width, height))
         axes = figure.subplots(max_nrows, ncols, squeeze=False)
@@ -145,7 +143,6 @@ class Chart:
 
     def plot(self, ax, timeline):
         metric_data = self.data
-        print(metric_data)
         metric_data = metric_data.reindex(metric_data.index.union(metric_data.index[1:] - 1), method='ffill')
 
         columns = self.metric_schema.keys()

@@ -225,6 +225,22 @@ class TargetCapacityBucket(CapacityBucket):
         return slack
 
 
+class TargetGroupCapacityBucket(CapacityBucket):
+    """
+    A bucket which moves as many IOs as possible without exceeding a group of
+    target buckets' combined capacity
+    """
+    def group_size(self):
+        raise NotImplementedError()
+
+    def target_group_capacity(self):
+        raise NotImplementedError()
+
+    def slack(self):
+        slack = max(self.target_group_capacity() - self.group_size(), 0)
+        return slack
+
+
 class GlobalCapacityBucket(CapacityBucket):
     """
     A bucket which moves all its IOs to a max of system slack

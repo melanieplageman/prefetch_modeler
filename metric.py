@@ -5,9 +5,14 @@ def metric(function):
     metric_type = type(Metric)(function.__name__, (Metric,), {"function": staticmethod(function)})
     return metric_type
 
+
 @metric
 def prefetch_rate_limit(pipeline):
     return float(pipeline['newfetcher'].rate())
+
+@metric
+def capacity(pipeline):
+    return float(pipeline['newfetcher'].target_group_capacity())
 
 @metric
 def raw_demand_rate(pipeline):
@@ -23,7 +28,7 @@ def storage_rate(pipeline):
 
 @metric
 def io_latency(pipeline):
-    latency = pipeline['newfetcher'].period.latency
+    latency = pipeline['newfetcher'].latency
     if latency == 0:
         return None
     return latency
@@ -151,6 +156,10 @@ def awaiting_dispatch(pipeline):
 @metric
 def do_prefetch(pipeline):
     return pipeline['remaining'].info['to_move']
+
+@metric
+def do_ratelimit(pipeline):
+    return pipeline['newfetcher'].info['to_move']
 
 @metric
 def do_dispatch(pipeline):

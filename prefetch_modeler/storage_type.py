@@ -58,6 +58,8 @@ def simple_storage(hint,
 
         @property
         def storage_speed(self):
+            if self.tick >= 200000:
+                return max_iops * 2
             return max_iops
 
         def target_capacity(self):
@@ -95,8 +97,8 @@ def simple_storage2(hint,
 
     class inflight(RateBucket):
         def rate(self):
-            # if self.tick <= 100000:
-            #     return max_iops * 0.5
+            if self.tick >= 200000:
+                return max_iops * 2
             return max_iops
 
     class deadline(DeadlineBucket):
@@ -129,7 +131,7 @@ slow_cloud1 = simple_storage2(
     kernel_invoke_batch_size = 1,
     submission_overhead_func = submission_latency,
     completion_latency_func = cloud_storage_latency,
-    max_iops=Rate(per_second=1000).value,
+    max_iops=Rate(per_second=1200).value,
 )
 
 empty_storage = []

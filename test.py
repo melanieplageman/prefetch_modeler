@@ -4,6 +4,8 @@ from prefetch_modeler.workload_type import even_wl, uneven_wl1, uneven_wl2
 from prefetch_modeler.core import Duration, Rate, Simulation
 # from newfetcher import NewFetcher, ConstantFetcher
 from ratelimiter import NewFetcher
+from ratelimiter2 import NewFetcher2
+from ratelimiter3 import NewFetcher3
 from localprefetcher import LocalPrefetcher
 from plot import ChartGroup, Chart
 from metric import *
@@ -22,12 +24,12 @@ from metric import *
 #     min_cnc_headroom = 5
 
 
-class NewFetcher1(NewFetcher):
-    og_rate = Rate(per_second=1100)
-    k_lat = Rate(per_second=100).value
+class NewFetcherCustom(NewFetcher2):
+    k = 0.2
+
 
 class LocalPrefetcher1(LocalPrefetcher):
-    og_rate = Rate(per_second=2000)
+    og_rate = Rate(per_second=1000)
     raw_lookback = 10
     avg_lookback = 4
     kp = 0.23
@@ -47,7 +49,6 @@ rate_args = ['Rate',
              ]
 integral_args = ['Integral',
           cnc_integral_term, cnc_integral_term_w_coefficient,
-          # awd_integral_term, awd_integral_term_w_coefficient,
                  ]
 proportional_args = ['Proportional', proportional_term,
                      proportional_term_w_coefficient]
@@ -55,14 +56,14 @@ proportional_args = ['Proportional', proportional_term,
 wait_args = ['Wait', wait_consume]
 wait_kwargs = {'plot_type':'area', 'stacked':False}
 
-duration_seconds = 1
+duration_seconds = 0.8
 
-# simulation1 = Simulation(LocalPrefetcher1, NewFetcher, *slow_cloud1, *even_wl)
-simulation1 = Simulation(LocalPrefetcher1, NewFetcher, *slow_cloud1, *even_wl)
+simulation1 = Simulation(LocalPrefetcher1, NewFetcher3, *slow_cloud1, *even_wl)
+# simulation1 = Simulation(LocalPrefetcher1, NewFetcherCustom, *slow_cloud1, *even_wl)
 
 group1 = ChartGroup(
     simulation1,
-    # Chart('Drain', remaining, done),
+    Chart('Drain', remaining, done),
 
     # Chart('Overview', completed_not_consumed, in_storage),
     # Chart(*wait_args, **wait_kwargs),
@@ -70,13 +71,15 @@ group1 = ChartGroup(
     # Chart('Rates', prefetch_rate, max_iops, demand_rate,
     #       consumption_rate, prefetch_rate_limit),
 
-    Chart('Rates', prefetch_rate, max_iops, demand_rate,
-          prefetch_rate_limit),
+    Chart('Rates', prefetch_rate, max_iops, demand_rate, consumption_rate,
+          ),
+
+    # Chart('Capacity', capacity),
 
     # Chart('CompletionInflight', completion_inflight_ratio),
 
     # Chart('Completion', raw_completion_rate),
-    Chart('InStorage', in_storage),
+    Chart('InStorage', in_storage, capacity),
     # Chart('InStorageRate', in_storage_rate),
 
     # Chart('Rates', prefetch_rate, max_iops,
@@ -87,9 +90,7 @@ group1 = ChartGroup(
 
     # Chart(*proportional_args),
 
-    # Chart('Latency', io_latency, base_latency_estimate),
     Chart('Latency', io_latency),
-    # Chart('Latency Rate', latency_rate_of_change),
 
     # Chart('Integral', lat_integral),
     # Chart('Rates', prefetch_rate, demand_rate, consumption_rate, max_iops),
@@ -135,5 +136,11 @@ result1 = simulation1.run(1000, duration=Duration(seconds=duration_seconds), tra
 # result3 = simulation3.run(1000, duration=Duration(seconds=duration_seconds), traced=[1, 5, 100])
 
 
+# import matplotlib.pyplot as plt
+# result1.pipeline['newfetcher'].diffs[2] = -20
+# xs = result1.pipeline['newfetcher'].diffs.keys()
+# ys = result1.pipeline['newfetcher'].diffs.values()
+# plt.plot(xs, ys)
+# plt.show()
 ChartGroup.show(result1.timeline, group1)
 # ChartGroup.show(result3.timeline, group3)
