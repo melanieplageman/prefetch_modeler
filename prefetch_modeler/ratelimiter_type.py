@@ -1,15 +1,16 @@
-from prefetch_modeler.core import RateBucket, Rate
+from prefetch_modeler.core import RateBucket, Rate, TargetGroupCapacityBucket
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Optional
 import itertools
 import math
+
 
 TRANSFER_COEFFICIENT = 0.5
 
 
-class NewFetcher2(RateBucket):
+class RateLimiter(TargetGroupCapacityBucket):
     name = 'newfetcher'
+    sinusoid_period = 800
 
     def __init__(self, *args, **kwargs):
         self.inflight_scores = {}
@@ -17,21 +18,39 @@ class NewFetcher2(RateBucket):
         super().__init__(*args, **kwargs)
 
     @property
+    def period(self):
+        return self.log[-1]
+
+    @property
     def in_storage(self):
         return len(self.pipeline['minimum_latency']) + \
             len(self.pipeline['inflight']) + \
             len(self.pipeline['deadline'])
 
-    def rate(self):
-        if len(self.inflight_scores) < 8:
-            return self.pipeline['remaining'].rate()
+    @property
+    def adjustment(self):
+        return None
+
+    def group_size(self):
+        return self.in_storage
+
+    def target_group_capacity(self):
+        # self.capacity = self.pipeline['remaining'].info['to_move']
+        # return self.pipeline['remaining'].info['to_move']
+        # print(self.pipeline['remaining'].rate())
+        if len(self.inflight_scores) < 4 and self.tick < 10000:
+            return 1
 
         scores = {
             ios: ios / math.pow(latency, 2) for ios, latency in self.inflight_scores.items()
         }
         best_score = max([ios for ios in self.inflight_scores], key=lambda ios: scores[ios])
 
-        return best_score / self.latency
+        amplitude = max(best_score / 10, 1)
+        sinusoid = amplitude * math.sin(self.tick / (2 * math.pi * self.sinusoid_period))
+        result = max(math.ceil(best_score + sinusoid), 1)
+
+        return result
 
     def to_move(self):
         to_move = super().to_move()

@@ -1,34 +1,13 @@
 from prefetch_modeler.storage_type import fast_local1, slow_cloud1
 from prefetch_modeler.workload_type import even_wl, uneven_wl1, uneven_wl2
-# from prefetch_modeler.prefetcher_type import PIPrefetcher
+from prefetch_modeler.prefetcher_type import PIPrefetcher
 from prefetch_modeler.core import Duration, Rate, Simulation
-# from newfetcher import NewFetcher, ConstantFetcher
-from ratelimiter import NewFetcher
-from ratelimiter2 import NewFetcher2
-from ratelimiter3 import NewFetcher3
-from localprefetcher import LocalPrefetcher
+from prefetch_modeler.ratelimiter_type import RateLimiter
 from plot import ChartGroup, Chart
 from metric import *
 
 
-# class PIPrefetcher1(PIPrefetcher):
-#     og_rate = Rate(per_second=4000)
-#     raw_lookback = 4
-#     avg_lookback = 3
-#     awd_lookback = 3
-#     kp = 0.5
-#     kh = 0.4
-#     ki_awd = -Rate(per_second=20).value
-#     ki_cnc = -Rate(per_second=20).value
-#     cnc_headroom = 5
-#     min_cnc_headroom = 5
-
-
-class NewFetcherCustom(NewFetcher2):
-    k = 0.2
-
-
-class LocalPrefetcher1(LocalPrefetcher):
+class LocalPrefetcher1(PIPrefetcher):
     og_rate = Rate(per_second=1000)
     raw_lookback = 10
     avg_lookback = 4
@@ -58,8 +37,7 @@ wait_kwargs = {'plot_type':'area', 'stacked':False}
 
 duration_seconds = 0.8
 
-simulation1 = Simulation(LocalPrefetcher1, NewFetcher3, *slow_cloud1, *even_wl)
-# simulation1 = Simulation(LocalPrefetcher1, NewFetcherCustom, *slow_cloud1, *even_wl)
+simulation1 = Simulation(LocalPrefetcher1, RateLimiter, *slow_cloud1, *even_wl)
 
 group1 = ChartGroup(
     simulation1,
