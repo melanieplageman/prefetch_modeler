@@ -17,7 +17,6 @@ class LocalPrefetcher1(PIPrefetcher):
 
 io_args = ['IO',
            completed_not_consumed,
-           # awaiting_dispatch,
            ]
 rate_args = ['Rate',
              prefetch_rate,
