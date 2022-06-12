@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+
+import argparse
+import sys
+import importlib.util
+from plot import ChartGroup, Chart
+from prefetch_modeler.core import Duration
+
+parser = argparse.ArgumentParser(description='Run simulation and display results.')
+parser.add_argument('file', type=str, help='file containing simulation and chart definitions')
+parser.add_argument('--volume', type=int,
+                    default=200, help='number of IOs in blocks to run through simulation')
+
+parser.add_argument('--duration', default=None, type=float, help='time in seconds to run simulation')
+
+args = parser.parse_args()
+
+spec = importlib.util.spec_from_file_location('user_defined_stuff', args.file)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+for group in module.output:
+    duration = None
+    if args.duration is not None:
+        duration = Duration(seconds=args.duration)
+    group.simulation.run(args.volume, duration=duration, traced=[1, 5, 100])
+
+ChartGroup.show(*module.output)

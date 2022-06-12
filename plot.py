@@ -2,10 +2,26 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import math
 
+class MetaChartGroup(type):
+    def __init__(self, name, bases, namespace):
+        super().__init__(name, bases, namespace)
+
+        self._charts = []
+        for attr_name, attr_value in namespace.items():
+            try:
+                is_chart = issubclass(attr_value, Chart)
+            except TypeError:
+                continue
+
+            if is_chart:
+                attr_value.name = attr_name
+                self._charts.append(attr_value)
+
+
 class ChartGroup:
-    def __init__(self, simulation, *args):
+    def __init__(self, simulation):
         self.simulation = simulation
-        self.charts = args
+        self.charts = [chart() for chart in self._charts]
 
         for chart in self.charts:
             chart.attach(self.simulation)
@@ -18,7 +34,7 @@ class ChartGroup:
         )
 
     @classmethod
-    def show(cls, timeline, *args):
+    def show(cls, *args):
         chart_groups = args
         stripe_ylimits = {}
         xlimit = Limit(0, 0)
@@ -53,7 +69,7 @@ class ChartGroup:
                 upper = upper * 1.15 if upper is not None else upper
                 axes[row][col].set_ylim(lower, upper)
                 axes[row][col].set_xlim(xlimit.lower, xlimit.upper)
-                chart.plot(axes[row][col], timeline)
+                chart.plot(axes[row][col])
 
         for i, chart_group in enumerate(chart_groups):
             axes[0][i].set_title(chart_group.title)
@@ -102,16 +118,27 @@ class Limit:
         return limit
 
 class Chart:
-    plot_type = 'line'
+    name = None
+    _plot_type = 'line'
+    _metric_schema = {}
+    _kwargs = {}
 
-    def __init__(self, name, *args, plot_type='line', **kwargs):
-        self.name = name
+    def __init__(self):
+        if not self._metric_schema:
+            raise Exception("Chart must have metrics")
+
         self.metric_schema = {
-            metric_type.__name__: metric_type() for metric_type in args
+            metric_name: metric_type() for metric_name, metric_type in self._metric_schema.items()
         }
-        self.plot_type = plot_type
-        self.kwargs = kwargs
         self._data = None
+
+    @property
+    def kwargs(self):
+        return self._kwargs
+
+    @property
+    def plot_type(self):
+        return self._plot_type
 
     def attach(self, simulation):
         simulation.metrics.extend(self.metric_schema.values())
@@ -141,7 +168,7 @@ class Chart:
         return ylimit
 
 
-    def plot(self, ax, timeline):
+    def plot(self, ax):
         metric_data = self.data
         metric_data = metric_data.reindex(metric_data.index.union(metric_data.index[1:] - 1), method='ffill')
 

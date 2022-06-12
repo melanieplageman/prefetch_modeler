@@ -1,6 +1,7 @@
 from prefetch_modeler.core import Metric
 
 
+
 def metric(function):
     metric_type = type(Metric)(function.__name__, (Metric,), {"function": staticmethod(function)})
     return metric_type
