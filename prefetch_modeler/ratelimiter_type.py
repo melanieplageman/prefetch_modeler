@@ -1,5 +1,4 @@
 from prefetch_modeler.core import RateBucket, Rate, TargetGroupCapacityBucket
-from dataclasses import dataclass
 from fractions import Fraction
 import itertools
 import math

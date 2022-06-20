@@ -1,5 +1,4 @@
 from prefetch_modeler.core import RateBucket, StopBucket, Rate, Interval
-from dataclasses import dataclass
 from collections import OrderedDict
 from fractions import Fraction
 import numpy as np
