@@ -35,9 +35,6 @@ class RateLimiter(TargetGroupCapacityBucket):
         return self.in_storage
 
     def target_group_capacity(self):
-        # self.capacity = self.pipeline['remaining'].info['to_move']
-        # return self.pipeline['remaining'].info['to_move']
-        # print(self.pipeline['remaining'].rate())
         if len(self.inflight_scores) < 4 and self.tick < 10000:
             return 1
 
@@ -93,14 +90,6 @@ class RateLimiter(TargetGroupCapacityBucket):
         old_latency = self.inflight_scores.setdefault(
             contention, latency)
         self.inflight_scores[contention] = (0.5 * latency + 0.5 * old_latency)
-
-        # for i, next_contention in enumerate(reversed(list(range(1, contention - 1))), start=2):
-        #     if next_contention not in self.inflight_scores:
-        #         self.inflight_scores[next_contention] = 0
-        #     coefficient = math.pow(TRANSFER_COEFFICIENT, i)
-        #     self.inflight_scores[next_contention] = (
-        #         coefficient * latency + (1 - coefficient) * self.inflight_scores[next_contention]
-        #     )
 
         maximum_contention_to_consider = contention * 2
         for i, next_contention in enumerate(range(contention, maximum_contention_to_consider), start=2):

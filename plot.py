@@ -117,6 +117,15 @@ class Limit:
         limit.set(self.lower, self.upper)
         return limit
 
+
+def ChartType(*args, plot_type='line', **kwargs):
+    class chart_type(Chart):
+        _plot_type = plot_type
+        _kwargs = kwargs
+        _metric_schema = {metric_type.__name__ : metric_type for metric_type in args}
+
+    return chart_type
+
 class Chart:
     name = None
     _plot_type = 'line'

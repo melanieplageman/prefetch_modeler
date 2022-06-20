@@ -179,11 +179,6 @@ class PIPrefetcher(RateBucket):
                                        prefetch_rate=new_rate))
 
     def reaction(self):
-        # if self.pipeline['inflight'].info['to_move']:
-        #     inflight = len(self.pipeline['inflight'])
-        #     submitted = len(self.pipeline['submitted'])
-        #     print(f'Tick: {self.tick}. inflight: {inflight}. submitted: {submitted}')
-
         if self.pipeline['completed'].info['to_move']:
             movement = Movement(self.tick, self.pipeline['completed'].info['to_move'])
             self.workload_record.append(movement)
