@@ -8,7 +8,7 @@ TRANSFER_COEFFICIENT = 0.5
 
 
 class RateLimiter(TargetGroupCapacityBucket):
-    name = 'newfetcher'
+    name = 'ratelimiter'
     sinusoid_period = 800
 
     def __init__(self, *args, **kwargs):

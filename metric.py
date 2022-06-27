@@ -9,11 +9,11 @@ def metric(function):
 
 @metric
 def prefetch_rate_limit(pipeline):
-    return float(pipeline['newfetcher'].rate())
+    return float(pipeline['ratelimiter'].rate())
 
 @metric
 def capacity(pipeline):
-    return float(pipeline['newfetcher'].target_group_capacity())
+    return float(pipeline['ratelimiter'].target_group_capacity())
 
 @metric
 def raw_demand_rate(pipeline):
@@ -25,18 +25,18 @@ def storage_capacity(pipeline):
 
 @metric
 def storage_rate(pipeline):
-    return float(pipeline['newfetcher'].raw_storage_rate)
+    return float(pipeline['ratelimiter'].raw_storage_rate)
 
 @metric
 def io_latency(pipeline):
-    latency = pipeline['newfetcher'].latency
+    latency = pipeline['ratelimiter'].latency
     if latency == 0:
         return None
     return latency
 
 @metric
 def base_latency_estimate(pipeline):
-    return pipeline['newfetcher'].regression
+    return pipeline['ratelimiter'].regression
 
 # @metric
 # def prop(pipeline):
@@ -48,30 +48,30 @@ def base_latency_estimate(pipeline):
 
 @metric
 def lat_derivative(pipeline):
-    latdt = float(pipeline['newfetcher'].latency_derivative)
+    latdt = float(pipeline['ratelimiter'].latency_derivative)
     if latdt == 0:
         return None
     return latdt
 
 @metric
 def gain(pipeline):
-    return pipeline['newfetcher'].recent_gain
+    return pipeline['ratelimiter'].recent_gain
 
 @metric
 def adjustment(pipeline):
-    return float(pipeline['newfetcher'].adjustment)
+    return float(pipeline['ratelimiter'].adjustment)
 
 @metric
 def lat_integral(pipeline):
-    return float(pipeline['newfetcher'].integral_term)
+    return float(pipeline['ratelimiter'].integral_term)
 
 @metric
 def storage_rate_change(pipeline):
-    return float(pipeline['newfetcher'].storage_rate_change)
+    return float(pipeline['ratelimiter'].storage_rate_change)
 
 @metric
 def latency_rate_of_change(pipeline):
-    return float(pipeline['newfetcher'].latency_rate)
+    return float(pipeline['ratelimiter'].latency_rate)
 
 @metric
 def submitted(pipeline):
@@ -106,7 +106,7 @@ def storage_latency_ratio2(pipeline):
     latency = io_latency.function(pipeline)
     if latency is None or latency == 0:
         return None
-    completed_rate = pipeline['newfetcher'].raw_storage_rate
+    completed_rate = pipeline['ratelimiter'].raw_storage_rate
     return float(completed_rate / latency)
 
 @metric
@@ -119,7 +119,7 @@ def remaining(pipeline):
 
 # @metric
 # def remaining(pipeline):
-#     return len(pipeline['remaining']) + len(pipeline['newfetcher'])
+#     return len(pipeline['remaining']) + len(pipeline['ratelimiter'])
 
 @metric
 def done(pipeline):
@@ -131,20 +131,20 @@ def cnc_headroom(pipeline):
 
 @metric
 def raw_completion_rate(pipeline):
-    raw = pipeline['newfetcher'].raw_completion_rate
+    raw = pipeline['ratelimiter'].raw_completion_rate
     return float(raw)
 
 @metric
 def completion_inflight_ratio(pipeline):
-    completion = pipeline['newfetcher'].raw_completion_rate
-    in_storage = pipeline['newfetcher'].in_storage_rate
+    completion = pipeline['ratelimiter'].raw_completion_rate
+    in_storage = pipeline['ratelimiter'].in_storage_rate
     if in_storage <= 0:
         return None
     return completion / in_storage
 
 @metric
 def in_storage_rate(pipeline):
-    in_storage_rate = pipeline['newfetcher'].in_storage_rate
+    in_storage_rate = pipeline['ratelimiter'].in_storage_rate
     return in_storage_rate
 
 @metric
@@ -160,7 +160,7 @@ def do_prefetch(pipeline):
 
 @metric
 def do_ratelimit(pipeline):
-    return pipeline['newfetcher'].info['to_move']
+    return pipeline['ratelimiter'].info['to_move']
 
 @metric
 def do_dispatch(pipeline):
