@@ -6,43 +6,6 @@ import itertools
 import math
 
 
-class BaselineSync(GlobalCapacityBucket):
-    name = 'remaining'
-
-    def max_buffers(self):
-        return 1
-
-
-class BaselineFetchAll(ContinueBucket):
-    name = 'remaining'
-
-    @classmethod
-    def hint(cls):
-        return (1, cls.__name__)
-
-
-class ConstantRatePrefetcher(RateBucket):
-    name = 'remaining'
-
-    og_rate = Rate(per_second=2000)
-
-    @classmethod
-    def hint(cls):
-        return (2, f"Constant Rate: {cls.og_rate}")
-
-    def rate(self):
-        return self.og_rate.value
-
-
-def recent_mean(iterator, take=8):
-    numerator = denominator = 0
-    for i, number in enumerate(itertools.islice(iterator, take)):
-        weight = math.exp(i)
-        numerator += weight * number
-        denominator += weight
-    return numerator / denominator
-
-
 @dataclass(kw_only=True)
 class LedgerEntry:
     tick: int
@@ -50,35 +13,10 @@ class LedgerEntry:
     prefetch_rate: Rate
 
 
-def humanify(rate):
-    return math.ceil(float(rate) * 1000 * 1000)
-
-
-class BufferMarkerBucket(MarkerBucket):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.marked = 0
-
-    def should_mark(self, io):
-        if self.marked < 1000:
-            self.marked += 1
-            return False
-        return True
-
-        # return self.counter % 3 == 0
-
-
-class BufferChecker(ForkBucket):
-    def target_bucket(self, io):
-        if getattr(io, 'cached', None):
-            return self.pipeline['completed']
-        return self.target
-
-
 from collections import namedtuple
 Movement = namedtuple('MovementRecord', ['tick', 'number'])
 
-class PIPrefetcher(RateBucket):
+class PartiallyCachedPIPrefetcher(RateBucket):
     name = 'remaining'
     og_rate = Rate(per_second=6000)
     raw_lookback = 66
@@ -86,6 +24,7 @@ class PIPrefetcher(RateBucket):
     kp = 0.5
     ki_cnc = -Rate(per_second=40).value
     cnc_headroom = 8
+    use_raw = False
 
     def __init__(self, *args, **kwargs):
         self.ledger = [LedgerEntry(tick=0,
@@ -94,10 +33,16 @@ class PIPrefetcher(RateBucket):
 
         super().__init__(*args, **kwargs)
         self.workload_record = []
-        self.storage_record = []
+        self.run_prefetcher = True
 
     def rate(self):
         return self.period.prefetch_rate
+
+    @property
+    def in_storage(self):
+        return len(self.pipeline['minimum_latency']) + \
+            len(self.pipeline['inflight']) + \
+            len(self.pipeline['deadline'])
 
     @classmethod
     def hint(cls):
@@ -108,20 +53,57 @@ class PIPrefetcher(RateBucket):
         return self.ledger[-1]
 
     @property
-    def lifetime_demands(self):
-        return self.pipeline['consumed'].counter
-
-    @property
-    def lifetime_completes(self):
-        return self.pipeline['completed'].counter
-
-    @property
     def completed(self):
         return len(self.pipeline['completed'])
 
-    @property
-    def inflight(self):
-        return len(self.pipeline['inflight'])
+    def run(self):
+        if self.run_prefetcher:
+            to_move = super().to_move()
+        else:
+            to_move = frozenset()
+
+        self.info['actual_to_move'] = to_move
+        self.info['to_move'] = len(to_move)
+
+        cached_blocks_moved = 0
+        for io in to_move:
+            target = self.target
+            if getattr(io, 'cached', None):
+                target = self.pipeline['completed']
+                self.volume += 1
+                cached_blocks_moved += 1
+            else:
+                target = self.target
+            self.remove(io)
+            target.add(io)
+            # if cached_blocks_moved + self.completed >= self.cnc_headroom:
+            #     break
+                # TODO would need to remove the remaining IOs which were set to
+                # be moved from actual_to_move and also decrement to_move and
+                # increment volume for each of these remaining ones
+
+        self.run_prefetcher = False
+
+    def next_action(self):
+        if not self.source:
+            return math.inf
+
+        if self.counter == 0:
+            return self.tick + 1
+
+        if self.run_prefetcher:
+            return self.tick + 1
+
+        # if self.in_storage + self.completed <= self.cnc_headroom:
+        #     return self.tick + 1
+
+        # if self.pipeline['completed'].info['to_move']:
+        #     return self.tick + 1
+
+        # if self.volume >= 1:
+        #     return self.tick + 1
+
+        return math.inf
 
     @property
     def raw_demand_rate(self):
@@ -147,6 +129,8 @@ class PIPrefetcher(RateBucket):
 
     @property
     def demand_rate(self):
+        if self.use_raw:
+            return self.raw_demand_rate
         raw_demand_rate = self.raw_demand_rate
 
         if raw_demand_rate == 0:
@@ -163,9 +147,6 @@ class PIPrefetcher(RateBucket):
         total = sum([item.raw_demand_rate for item in itertools.islice(
             reversed(usable_demand_rate_log), self.avg_lookback)])
         return Fraction(total, self.avg_lookback)
-
-    def run(self, *args, **kwargs):
-        super().run(*args, **kwargs)
 
     @property
     def proportional_term(self):
@@ -209,12 +190,8 @@ class PIPrefetcher(RateBucket):
             moved = len([io for io in self.pipeline['completed'].info['actual_to_move'] if not
                         hasattr(io, 'cached')])
 
-            movement = Movement(self.tick, moved)
-            self.workload_record.append(movement)
+            if moved > 0:
+                movement = Movement(self.tick, moved)
+                self.workload_record.append(movement)
+            self.run_prefetcher = True
             self.adjust()
-
-            # movement = Movement(self.tick, self.pipeline['completed'].info['to_move'])
-            # self.workload_record.append(movement)
-            # self.adjust()
-
-

@@ -40,7 +40,10 @@ class RateLimiter(TargetGroupCapacityBucket):
         scores = {
             ios: ios / math.pow(latency, 2) for ios, latency in self.inflight_scores.items()
         }
-        best_score = max([ios for ios in self.inflight_scores], key=lambda ios: scores[ios])
+        try:
+            best_score = max([ios for ios in self.inflight_scores], key=lambda ios: scores[ios])
+        except ValueError:
+            return 1000
 
         amplitude = max(best_score / 10, 1)
         sinusoid = amplitude * math.sin(self.tick / (2 * math.pi * self.sinusoid_period))
@@ -61,6 +64,9 @@ class RateLimiter(TargetGroupCapacityBucket):
         total_contention = 0
 
         for io in self.pipeline['completed']:
+            if hasattr(io, 'cached'):
+                continue
+
             if getattr(io, 'completed', None) is None:
                 io.completed = self.tick
             latency = io.completed - io.submitted
@@ -71,6 +77,9 @@ class RateLimiter(TargetGroupCapacityBucket):
         # If consumption rate is fast enough, IOs might always be moved to
         # consumed right away, so we need to find them and count them
         for io in self.pipeline['consumed']:
+            if hasattr(io, 'cached'):
+                continue
+
             if getattr(io, 'completed', None) is not None:
                 continue
             io.completed = self.tick

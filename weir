@@ -23,6 +23,6 @@ for group in module.output:
     duration = None
     if args.duration is not None:
         duration = Duration(seconds=args.duration)
-    group.simulation.run(args.volume, duration=duration, traced=[1, 5, 100])
+    group.simulation.run(args.volume, duration=duration, traced=[])
 
 ChartGroup.show(*module.output)

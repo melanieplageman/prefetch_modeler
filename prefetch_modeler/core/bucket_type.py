@@ -35,6 +35,8 @@ class DeadlineBucket(Bucket):
         return frozenset(io for io in self.source if io.move_at <= self.tick)
 
 
+
+
 class DialBucket(DeadlineBucket):
     """A bucket that will retain each IO for a specified amount of time."""
 
@@ -56,6 +58,35 @@ class ContinueBucket(Bucket):
 
     def next_action(self):
         return self.tick + 1 if self.source else math.inf
+
+
+class MarkerBucket(ContinueBucket):
+    """A bucket which marks all IOs meeting a certain condition defined by the user."""
+
+    def should_mark(self, io):
+        raise NotImplementedError()
+
+    def add(self, io):
+        super().add(io)
+        if self.should_mark(io):
+            io.cached = True
+
+
+class ForkBucket(Bucket):
+    """ A bucket which moves IOs to a bucket determined at run time"""
+
+    def target_bucket(self, io):
+        return self.target
+
+    def run(self):
+        to_move = frozenset(self.source)
+        self.info['actual_to_move'] = to_move
+        self.info['to_move'] = len(to_move)
+
+        for io in to_move:
+            target = self.target_bucket(io)
+            self.remove(io)
+            target.add(io)
 
 
 class StopBucket(Bucket):

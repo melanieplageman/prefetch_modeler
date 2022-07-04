@@ -95,6 +95,7 @@ def workload_type(hint, consumption_rate_func, saved_rates):
         def __init__(self, *args, **kwargs):
             self.consumerator = None
             self.saved_rates = saved_rates
+            self.waiting = False
             super().__init__(*args, **kwargs)
 
         @classmethod
@@ -117,6 +118,14 @@ def workload_type(hint, consumption_rate_func, saved_rates):
             else:
                 result = min(next_range_start, next_action)
             return result
+
+        def reaction(self):
+            if not self.waiting and self.info['want_to_move'] > self.info['to_move']:
+                self.waiting = True
+                return
+
+            if self.waiting and self.info['to_move'] >= self.info['want_to_move']:
+                self.waiting = False
 
 
     class consumed(StopBucket):

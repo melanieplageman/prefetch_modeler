@@ -8,6 +8,10 @@ def metric(function):
 
 
 @metric
+def do_cd_fetch(pipeline):
+    return pipeline['cd_fetcher'].info['to_move']
+
+@metric
 def prefetch_rate_limit(pipeline):
     return float(pipeline['ratelimiter'].rate())
 
@@ -114,6 +118,10 @@ def completed_not_consumed(pipeline):
     return len(pipeline['completed'])
 
 @metric
+def cd_remaining(pipeline):
+    return len(pipeline['cd_fetcher'])
+
+@metric
 def remaining(pipeline):
     return len(pipeline['remaining'])
 
@@ -124,6 +132,10 @@ def remaining(pipeline):
 @metric
 def done(pipeline):
     return len(pipeline['consumed'])
+
+@metric
+def constant_cnc_headroom(pipeline):
+    return pipeline['cd_fetcher'].cnc_headroom
 
 @metric
 def cnc_headroom(pipeline):

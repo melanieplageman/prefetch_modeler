@@ -139,6 +139,7 @@ class Bucket(OrderedDict):
 
     def run(self):
         to_move = self.to_move()
+        self.info['actual_to_move'] = frozenset(to_move)
         self.info['to_move'] = len(to_move)
 
         if len(to_move):
