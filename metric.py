@@ -8,6 +8,19 @@ def metric(function):
 
 
 @metric
+def wait_time(pipeline):
+    return pipeline['cd_fetcher'].info.get('wait_time', 0)
+
+@metric
+def something_time(pipeline):
+    return pipeline['cd_fetcher'].info.get('delta', 0)
+
+@metric
+def idle_time(pipeline):
+    return -pipeline['cd_fetcher'].info.get('idle_time', 0)
+
+
+@metric
 def do_cd_fetch(pipeline):
     return pipeline['cd_fetcher'].info['to_move']
 
@@ -132,6 +145,10 @@ def remaining(pipeline):
 @metric
 def done(pipeline):
     return len(pipeline['consumed'])
+
+@metric
+def prefetch_distance(pipeline):
+    return pipeline['cd_fetcher'].prefetch_distance
 
 @metric
 def constant_cnc_headroom(pipeline):

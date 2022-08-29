@@ -73,18 +73,21 @@ class MarkerBucket(ContinueBucket):
 
 
 class ForkBucket(Bucket):
-    """ A bucket which moves IOs to a bucket determined at run time"""
+    """A bucket which moves some IOs to a different bucket."""
 
     def target_bucket(self, io):
-        return self.target
+        raise NotImplementedError()
 
     def run(self):
         to_move = frozenset(self.source)
+
         self.info['actual_to_move'] = to_move
         self.info['to_move'] = len(to_move)
 
         for io in to_move:
             target = self.target_bucket(io)
+            if target is None:
+                target = self.target
             self.remove(io)
             target.add(io)
 
