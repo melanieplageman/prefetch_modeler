@@ -58,6 +58,7 @@ class Pipeline:
             timeline.append(self.tick)
 
             if len(self.buckets[-1]) == len(ios):
+                print("break because last bucket has all IOs")
                 break
 
             actionable = {
@@ -75,6 +76,7 @@ class Pipeline:
             last_tick = self.tick
 
             if duration is not None and self.tick > duration.total:
+                print("break because tick is bigger than duration")
                 break
 
 
@@ -149,6 +151,10 @@ class Bucket(OrderedDict):
         for io in to_move:
             self.remove(io)
             self.target.add(io)
+
+    @property
+    def ios(self):
+        return self.source.keys()
 
     def reaction(self):
         pass

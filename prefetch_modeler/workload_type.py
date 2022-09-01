@@ -5,6 +5,8 @@ import numpy as np
 import math
 import random
 import pandas as pd
+from dataclasses import dataclass
+from numpy import mean
 
 
 class rangerator:
@@ -90,6 +92,14 @@ class SineRaterator:
         return self._rates
 
 
+@dataclass
+class ConsumptionLogEntry:
+    tick: int
+    submitted: int
+    consumed: int
+    prefetch_distance: int
+
+
 def workload_type(hint, consumption_rate_func, saved_rates):
     class completed(RateBucket):
         def __init__(self, *args, **kwargs):
@@ -120,12 +130,40 @@ def workload_type(hint, consumption_rate_func, saved_rates):
 
 
     class consumed(StopBucket):
-        pass
+        def __init__(self, *args, **kwargs):
+            self.consumption_log = []
+            super().__init__(*args, **kwargs)
+
+        def add(self, io):
+            if getattr(io, "cached", False):
+                return super().add(io)
+
+            io.consumption_time = self.tick
+            io.processing_time = io.consumption_time - io.submission_time
+            # self.consumption_log.append(ConsumptionLogEntry(tick=self.tick,
+            #                                                 submitted=io.submission_time,
+            #                                                 consumed=self.tick,
+            #                                                 prefetch_distance=io.prefetch_distance))
+            super().add(io)
+
+        def reaction(self):
+            times = []
+            for io in self:
+                if getattr(io, "cached", False):
+                    continue
+                if io.consumption_time != self.tick:
+                    continue
+                times.append(io.consumption_time - io.submission_time + io.wait_time)
+
+            if times:
+                avg_times = mean(times)
+                # print(f'tick: {self.tick}. avg_times: {avg_times}')
+                self.info['avg_processing_time'] = avg_times * avg_times
 
     return [completed, consumed]
 
 def test_consumption_rate(self):
-    return Rate(per_second=3100).value
+    return Rate(per_second=1000).value
 
 even_wl = workload_type('Even Workload', test_consumption_rate, None)
 

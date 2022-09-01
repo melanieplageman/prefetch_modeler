@@ -1,5 +1,5 @@
 from prefetch_modeler.core import ContinueBucket, GlobalCapacityBucket, RateBucket, \
-Rate, Duration, ForkBucket, MarkerBucket
+Rate, Duration, ForkBucket
 from dataclasses import dataclass
 from fractions import Fraction
 import itertools

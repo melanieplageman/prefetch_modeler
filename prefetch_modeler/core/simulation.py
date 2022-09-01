@@ -37,8 +37,10 @@ class Simulation:
         ios = [Tracer(i) if i in traced else IO() for i in range(volume)]
 
         for i, io in enumerate(ios):
-            if i > volume / 1.5:
+            if i % 2 == 0:
                 io.cached = True
+            # if i > volume / 1.5:
+            #     io.cached = True
 
         pipeline = Pipeline(*[bucket_type(
             getattr(bucket_type, 'name', bucket_type.__name__)

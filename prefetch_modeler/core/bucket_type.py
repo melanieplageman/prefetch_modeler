@@ -35,8 +35,6 @@ class DeadlineBucket(Bucket):
         return frozenset(io for io in self.source if io.move_at <= self.tick)
 
 
-
-
 class DialBucket(DeadlineBucket):
     """A bucket that will retain each IO for a specified amount of time."""
 
@@ -60,16 +58,44 @@ class ContinueBucket(Bucket):
         return self.tick + 1 if self.source else math.inf
 
 
-class MarkerBucket(ContinueBucket):
-    """A bucket which marks all IOs meeting a certain condition defined by the user."""
+class SequenceMarkerBucket(ContinueBucket):
+    name = 'sequencer'
 
-    def should_mark(self, io):
-        raise NotImplementedError()
-
+    """A bucket which marks all IOs with a sequentially increasing ID."""
     def add(self, io):
+        io.sequence_id = self.counter
         super().add(io)
-        if self.should_mark(io):
-            io.cached = True
+
+
+class OrderEnforcerBucket(Bucket):
+    name = 'enforcer'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.next_sequence_id = 0
+        self.previous_length = 0
+
+    def to_move(self):
+        if not self.source:
+            return frozenset()
+
+        ordered_ios = sorted(self.ios, key=lambda item: item.sequence_id)
+        result = []
+
+        for io in ordered_ios:
+            if io.sequence_id > self.next_sequence_id:
+                break
+            result.append(io)
+            self.next_sequence_id += 1
+
+        return result
+
+    def next_action(self):
+        if len(self.source) != self.previous_length:
+            self.previous_length = len(self.source)
+            return self.tick + 1
+
+        return math.inf
 
 
 class ForkBucket(Bucket):
@@ -210,7 +236,7 @@ class ThresholdBucket(Bucket):
     def threshold(self):
         raise NotImplementedError()
 
-    def to_move(self):
+    def _move(self):
         if len(self) < self.threshold():
             return frozenset()
         return frozenset(self.source)
@@ -287,5 +313,6 @@ class GlobalCapacityBucket(CapacityBucket):
         # That is, all the IOs that it has seen so far minus the number of IOs
         # the client has consumed
         in_progress = self.target.counter - len(self.pipeline['consumed'])
+        # print(f"in_progress is self.target: {self.target}'s counter: {self.target.counter} - consumed: {len(self.pipeline['consumed'])}")
         # In_progress shouldn't exceed max_buffers
         return max(self.max_buffers() - in_progress, 0)

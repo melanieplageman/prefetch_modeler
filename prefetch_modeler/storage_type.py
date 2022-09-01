@@ -107,7 +107,7 @@ def submission_latency(self):
     return int(Duration(microseconds=10).total)
 
 def local_storage_latency(self):
-    return int(Duration(microseconds=500).total)
+    return int(Duration(microseconds=8000).total)
 
 fast_local1 = simple_storage2(
     'Local Storage',
@@ -115,7 +115,7 @@ fast_local1 = simple_storage2(
     kernel_invoke_batch_size = 1,
     submission_overhead_func = submission_latency,
     completion_latency_func = local_storage_latency,
-    max_iops=Rate(per_second=20000).value,
+    max_iops=Rate(per_second=2000).value,
 )
 
 def cloud_storage_latency(self):
@@ -127,7 +127,7 @@ slow_cloud1 = simple_storage2(
     kernel_invoke_batch_size = 1,
     submission_overhead_func = submission_latency,
     completion_latency_func = cloud_storage_latency,
-    max_iops=Rate(per_second=1200).value,
+    max_iops=Rate(per_second=800).value,
 )
 
 empty_storage = []

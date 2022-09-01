@@ -1,5 +1,5 @@
 from prefetch_modeler.core import ContinueBucket, GlobalCapacityBucket, RateBucket, \
-Rate, Duration, ForkBucket, MarkerBucket
+Rate, Duration, ForkBucket
 from dataclasses import dataclass
 from fractions import Fraction
 import itertools
@@ -53,8 +53,19 @@ class LedgerEntry:
 def humanify(rate):
     return math.ceil(float(rate) * 1000 * 1000)
 
+class CachedMarkerBucket(ContinueBucket):
+    """A bucket which marks all IOs meeting a certain condition defined by the user."""
 
-class BufferMarkerBucket(MarkerBucket):
+    def should_mark(self, io):
+        raise NotImplementedError()
+
+    def add(self, io):
+        super().add(io)
+        if self.should_mark(io):
+            io.cached = True
+
+
+class BufferMarkerBucket(CachedMarkerBucket):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.marked = 0

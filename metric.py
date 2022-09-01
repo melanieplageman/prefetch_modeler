@@ -1,4 +1,5 @@
 from prefetch_modeler.core import Metric
+from numpy import mean
 
 
 
@@ -10,10 +11,6 @@ def metric(function):
 @metric
 def wait_time(pipeline):
     return pipeline['cd_fetcher'].info.get('wait_time', 0)
-
-@metric
-def something_time(pipeline):
-    return pipeline['cd_fetcher'].info.get('delta', 0)
 
 @metric
 def idle_time(pipeline):
@@ -275,3 +272,46 @@ def awd_integral_term_w_coefficient(pipeline):
     term = pipeline['remaining'].awd_integral_term
     gain = pipeline['remaining'].ki_awd
     return float(term * gain)
+
+@metric
+def avg_total_latency_completed_ios(pipeline):
+    real_ios = [io for io in pipeline['completed'] if getattr(io, 'cached', None) is None]
+    if not real_ios:
+        return None
+    completion_latencies = [io.completion_time - io.submission_time for io in real_ios]
+    return mean(completion_latencies)
+
+@metric
+def latency_dt(pipeline):
+    return pipeline['cd_fetcher'].info.get('latency_dt', None)
+
+@metric
+def in_storage_dt(pipeline):
+    return pipeline['cd_fetcher'].info.get('in_storage_dt', None)
+
+@metric
+def wait_dt(pipeline):
+    return pipeline['cd_fetcher'].info.get('wait_dt', None)
+
+@metric
+def latency_cost(pipeline):
+    # return in_storage.function(pipeline) / avg_total_latency_completed_ios.function(pipeline)
+    return pipeline['cd_fetcher'].info.get('latency_cost', None)
+
+@metric
+def wait_benefit(pipeline):
+    return pipeline['cd_fetcher'].info.get('wait_benefit', None)
+
+@metric
+def wait_benefit_dt(pipeline):
+    return pipeline['cd_fetcher'].info.get('wait_benefit_dt', None)
+
+@metric
+def latency_cost_dt(pipeline):
+    return pipeline['cd_fetcher'].info.get('latency_cost_dt', None)
+
+@metric
+def processing_vs_pfd(pipeline):
+    avg_p_t = pipeline['consumed'].info.get('avg_processing_time', 0)
+    return avg_p_t
+
