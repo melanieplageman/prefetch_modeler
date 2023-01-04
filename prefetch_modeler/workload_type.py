@@ -148,30 +148,30 @@ def workload_type(hint, consumption_rate_func, saved_rates):
 
         def reaction(self):
             times = []
-            for io in self:
-                if getattr(io, "cached", False):
-                    continue
-                if io.consumption_time != self.tick:
-                    continue
-                times.append(io.consumption_time - io.submission_time + io.wait_time)
+            # for io in self:
+            #     if getattr(io, "cached", False):
+            #         continue
+            #     if io.consumption_time != self.tick:
+            #         continue
+            #     times.append(io.consumption_time - io.submission_time + io.wait_time)
 
-            if times:
-                avg_times = mean(times)
-                # print(f'tick: {self.tick}. avg_times: {avg_times}')
-                self.info['avg_processing_time'] = avg_times * avg_times
+            # if times:
+            #     avg_times = mean(times)
+            #     # print(f'tick: {self.tick}. avg_times: {avg_times}')
+            #     self.info['avg_processing_time'] = avg_times * avg_times
 
     return [completed, consumed]
 
 def test_consumption_rate(self):
-    return Rate(per_second=3000).value
+    return Rate(per_second=2000).value
 
 even_wl = workload_type('Even Workload', test_consumption_rate, None)
 
 def consumption_rate_func6(self):
     return self.saved_rates.get_rate(getattr(self, 'tick', 0))
 
-steps = [50000, 100000, 90000]
-rates = [1000, 3000, 2000]
+steps = [50000, 100000, 90000, 100000]
+rates = [1000, 3000, 2000, 4300]
 default_rate = 1400
 saved_rates_reg1 = SavedRates(steps, rates, default_rate)
 
@@ -183,3 +183,30 @@ default_rate = 2000
 saved_rates_sine1 = SavedRates(steps, rates, default_rate)
 
 uneven_wl2 = workload_type('Uneven Workload', consumption_rate_func6, saved_rates_sine1)
+
+
+
+
+
+
+
+
+def sinusoid_workload_type(hint, base_rate, amplitude_proportion, period):
+    class completed(RateBucket):
+        @classmethod
+        def hint(cls):
+            return (1, hint)
+
+        def rate(self):
+            amplitude = base_rate * amplitude_proportion
+            return base_rate + amplitude * np.sin(self.tick / period)
+
+    class consumed(StopBucket):
+        def add(self, io):
+            if getattr(io, "cached", False):
+                return super().add(io)
+            io.consumption_time = self.tick
+            io.processing_time = io.consumption_time - io.submission_time
+            super().add(io)
+
+    return [completed, consumed]

@@ -98,7 +98,9 @@ def simple_storage2(hint,
             return max_iops
 
     class deadline(DeadlineBucket):
-        pass
+        def remove(self, io):
+            io.completion_time = self.tick
+            return super().remove(io)
 
     return [minimum_latency, inflight, deadline]
 
@@ -107,7 +109,7 @@ def submission_latency(self):
     return int(Duration(microseconds=10).total)
 
 def local_storage_latency(self):
-    return int(Duration(microseconds=8000).total)
+    return int(Duration(microseconds=800).total)
 
 fast_local1 = simple_storage2(
     'Local Storage',
@@ -115,11 +117,11 @@ fast_local1 = simple_storage2(
     kernel_invoke_batch_size = 1,
     submission_overhead_func = submission_latency,
     completion_latency_func = local_storage_latency,
-    max_iops=Rate(per_second=5000).value,
+    max_iops=Rate(per_second=6000).value,
 )
 
 def cloud_storage_latency(self):
-    return int(Duration(milliseconds=3).total)
+    return int(Duration(milliseconds=9).total)
 
 slow_cloud1 = simple_storage2(
     'Cloud Storage',
