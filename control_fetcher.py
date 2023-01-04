@@ -8,6 +8,17 @@ import itertools
 import math
 from numpy import mean
 
+class ConstantDistancePrefetcher(GlobalCapacityBucket):
+    name = 'cd_fetcher'
+    prefetch_distance = 100
+
+    @classmethod
+    def hint(cls):
+        return (1, cls.__name__)
+
+    def max_buffers(self):
+        return self.prefetch_distance
+
 @dataclass
 class CompletionLogEntry:
     tick: int
@@ -19,19 +30,20 @@ class ChangeLogEntry:
     prefetch_distance: int
     throughput: float
 
-class HistoryLimitFetcher(ConstantDistancePrefetcher):
-    headroom = 2
+class ControlFetcher(ConstantDistancePrefetcher):
+    headroom = 20
     target_idle_time = 20
 
     def __init__(self, *args, **kwargs):
-        self.prefetch_distance = self.headroom
-        self.calculated_pfd = None
-
+        self.prefetch_distance = 3
+        self.last_adjusted = 0
+        self.adjust_interval = 80000
+        self.adjustment_size = 2
         self.waited_at = None
         self.adjust = True
-
         self.completion_log = []
         self.change_log = []
+        self.headroom = 2
 
         super().__init__(*args, **kwargs)
 
@@ -69,20 +81,16 @@ class HistoryLimitFetcher(ConstantDistancePrefetcher):
         self.info['wait_time'] = wait_time
         self.info['idle_time'] = idle_time
 
-        if self.calculated_pfd is not None:
-            new_pfd = self.calculated_pfd
-        else:
-            new_pfd = self.prefetch_distance
-
-        if new_pfd != self.prefetch_distance:
-            crate = self.completion_rate
-            print(f'tick: {self.tick}. old pfd: {self.prefetch_distance}. new pfd: {new_pfd}')
-            tput = crate if crate is not None else 0
-            self.change_log.append(ChangeLogEntry(tick=self.tick,
-                prefetch_distance=new_pfd, throughput=tput))
-
+        new_pfd = self.prefetch_distance * self.adjustment_size
+        print(f'tick: {self.tick}. old pfd: {self.prefetch_distance}. new pfd: {new_pfd}')
+        crate = self.completion_rate
+        tput = crate if crate is not None else 0
+        self.change_log.append(ChangeLogEntry(tick=self.tick,
+            prefetch_distance=new_pfd, throughput=tput))
         self.prefetch_distance = new_pfd
+
         self.adjust = False
+        self.last_adjusted = self.tick
 
         return int(self.prefetch_distance)
 
@@ -103,7 +111,6 @@ class HistoryLimitFetcher(ConstantDistancePrefetcher):
 
         nios = sum(entry.number for entry in newlog)
         return float(nios / denom)
-
 
     def reaction(self):
         # Determine current wait time
@@ -128,43 +135,8 @@ class HistoryLimitFetcher(ConstantDistancePrefetcher):
         for io in completed:
             io.completion_time = getattr(io, "completion_time", self.tick)
 
-        tput = self.completion_rate
-        if tput is None:
-            return
-        avg_tput = 0
-        avg_pfd = 0
-        nentries = 0
-        for io in consumed:
-            if getattr(io, "cached", None) is not None:
-                continue
-
-            if getattr(io, "accounted", None) is not None:
-                continue
-
-            io.accounted = True
-
-            if io.prefetch_distance == self.prefetch_distance:
-                continue
-
-            entry = self.change_log[-1]
-            if tput > entry.throughput:
-                continue
-            avg_pfd = entry.prefetch_distance
-            avg_tput += entry.throughput
-            nentries += 1
-        
-        if nentries == 0:
-            return
-        avg_tput = avg_tput / nentries
-        avg_pfd = avg_pfd / nentries
-
-        if tput < avg_tput:
-            self.calculated_pfd = avg_pfd
+        if self.last_adjusted + self.adjust_interval <= self.tick:
             self.adjust = True
-        else:
-            self.calculated_pfd = None
 
     def next_action(self):
         return self.tick + 1 if self.adjust else super().next_action()
-
-

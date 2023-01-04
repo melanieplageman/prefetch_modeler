@@ -19,36 +19,33 @@ class ConstantDistancePrefetcher(GlobalCapacityBucket):
         return self.prefetch_distance
 
 @dataclass
-class LatencyLogEntry:
-    tick: int
-    in_storage: int
-    latency: float
-
-@dataclass
-class WaitLogEntry:
-    tick: int
-    in_storage: int
-    wait: float
-
-@dataclass
 class CompletionLogEntry:
     tick: int
     number: int
 
-class VariableDistancePrefetcher(ConstantDistancePrefetcher):
+@dataclass
+class ChangeLogEntry:
+    tick: int
+    prefetch_distance: int
+    throughput: float
+
+class BlendedPrefetcher(ConstantDistancePrefetcher):
     headroom = 2
     target_idle_time = 20
     multiplier = 1 / 20_000_000
 
     def __init__(self, *args, **kwargs):
         self.prefetch_distance = self.headroom
-        self.latency_log = []
-        self.wait_log = []
-        self.completion_log = []
+        self.calculated_pfd = None
 
         self.waited_at = None
         self.last_adjusted = 0
         self.adjust = True
+
+        self.tput_denom = 100000
+
+        self.completion_log = []
+        self.change_log = []
 
         super().__init__(*args, **kwargs)
 
@@ -66,15 +63,14 @@ class VariableDistancePrefetcher(ConstantDistancePrefetcher):
     def completion_rate(self):
         if not self.completion_log:
             return None
-        denom = 100000
         from itertools import takewhile
         newlog = takewhile(
-            lambda entry: entry.tick > self.tick - denom,
+            lambda entry: entry.tick > self.tick - self.tput_denom,
             reversed(self.completion_log)
         )
 
         nios = sum(entry.number for entry in newlog)
-        return float(nios / denom)
+        return float(nios / self.tput_denom)
 
     @property
     def in_storage(self):
@@ -85,6 +81,8 @@ class VariableDistancePrefetcher(ConstantDistancePrefetcher):
     def max_buffers(self):
         if self.adjust is False:
             return int(self.prefetch_distance)
+
+        old_pfd = self.prefetch_distance
 
         if self.waited_at is not None:
             wait_time = self.tick - self.waited_at
@@ -99,7 +97,16 @@ class VariableDistancePrefetcher(ConstantDistancePrefetcher):
         multiplier = self.multiplier * (self.tick - self.last_adjusted)
 
         self.prefetch_distance += multiplier * delta
-        self.prefetch_distance = max(self.prefetch_distance, 0)
+
+        if self.calculated_pfd is not None:
+            self.prefetch_distance = self.calculated_pfd
+
+        if old_pfd != self.prefetch_distance:
+            # print(f'tick: {self.tick}. old pfd: {self.prefetch_distance}. new pfd: {self.prefetch_distance}')
+            crate = self.completion_rate
+            tput = crate if crate is not None else 0
+            self.change_log.append(ChangeLogEntry(tick=self.tick,
+                prefetch_distance=self.prefetch_distance, throughput=tput))
 
         self.adjust = False
         self.last_adjusted = self.tick
@@ -108,57 +115,12 @@ class VariableDistancePrefetcher(ConstantDistancePrefetcher):
         self.info['wait_time'] = wait_time
         self.info['idle_time'] = idle_time
 
-        if self.in_storage > 0:
-            wait_benefit = float(wait_time / self.in_storage)
-        else:
-            wait_benefit = None
-
-        self.info['wait_benefit'] = wait_benefit
-        if wait_benefit is not None:
-            new_wait_log = WaitLogEntry(tick=self.tick, in_storage=self.in_storage, wait=wait_time)
-
-            if len(self.wait_log) > 1:
-                self.info['wait_benefit_dt'] = self.wait_dt(self.wait_log[-1],
-                                                            new_wait_log)
-            if wait_benefit is not None:
-                self.wait_log.append(new_wait_log)
-
+        self.prefetch_distance = max(self.prefetch_distance, 0)
         return int(self.prefetch_distance)
 
     @property
     def cnc(self):
         return len(self.pipeline['completed'])
-
-    def avg_real_io_latency(self, ios):
-        real_ios = [io for io in ios if getattr(io, 'cached', None) is None]
-        if not real_ios:
-            return None
-        completion_latencies = [io.completion_time - io.submission_time for io in real_ios]
-        return mean(completion_latencies)
-
-    def wait_dt(self, old, new):
-        old_wait_benefit = 0
-        if old.in_storage > 0:
-            old_wait_benefit = float(old.wait / old.in_storage)
-
-        new_wait_benefit = 0
-        if new.in_storage > 0:
-            new_wait_benefit = float(new.wait / new.in_storage)
-
-        time_delta =  new.tick - old.tick
-        if time_delta > 0:
-            return (new_wait_benefit - old_wait_benefit) / time_delta
-        return 0
-
-    def latency_dt(self, old, new):
-        old_latency_cost = float(old.latency / old.in_storage)
-
-        new_latency_cost = float(new.latency / new.in_storage)
-
-        time_delta =  new.tick - old.tick
-        if time_delta > 0:
-            return (new_latency_cost - old_latency_cost) / time_delta
-        return 0
 
     def reaction(self):
         # Determine current wait time
@@ -184,36 +146,43 @@ class VariableDistancePrefetcher(ConstantDistancePrefetcher):
             entry = CompletionLogEntry(tick=self.tick, number=ncompleted)
             self.completion_log.append(entry)
 
-        avg_total_latency = self.avg_real_io_latency(completed)
+        consumed = self.pipeline['consumed']
+        tput = self.completion_rate
+        if tput is None:
+            return
+        avg_tput = 0
+        avg_pfd = 0
+        nentries = 0
+        for io in consumed:
+            if getattr(io, "cached", None) is not None:
+                continue
 
-        if avg_total_latency is None or self.in_storage == 0:
+            if getattr(io, "accounted", None) is not None:
+                continue
+
+            io.accounted = True
+
+            if io.prefetch_distance == self.prefetch_distance:
+                continue
+
+            entry = self.change_log[-1]
+            if tput > entry.throughput:
+                continue
+            avg_pfd += entry.prefetch_distance
+            avg_tput += entry.throughput
+            nentries += 1
+        
+        if nentries == 0:
             return
 
-        self.info['latency_cost'] = float(avg_total_latency / self.in_storage)
+        avg_tput = avg_tput / nentries
+        avg_pfd = avg_pfd / nentries
 
-        new_latency_log = LatencyLogEntry(tick=self.tick, in_storage=self.in_storage, latency=avg_total_latency)
-
-        if len(self.latency_log) > 1:
-            self.info['latency_cost_dt'] = self.latency_dt(self.latency_log[-1],
-                                                    new_latency_log)
-
-        self.latency_log.append(new_latency_log)
-
+        if tput < avg_tput:
+            self.calculated_pfd = avg_pfd
+        else:
+            self.calculated_pfd = None
 
     def next_action(self):
         return self.tick + 1 if self.adjust else super().next_action()
-
-
-class TestConstantPrefetcher(ConstantRatePrefetcher):
-    og_rate = Rate(per_second=2000)
-
-    def remove(self, io):
-        io.submission_time = self.tick
-        super().remove(io)
-
-    def reaction(self):
-        completed = self.pipeline['completed']
-
-        for io in self.pipeline['completed']:
-            io.completion_time = getattr(io, "completion_time", self.tick)
 

@@ -115,7 +115,7 @@ fast_local1 = simple_storage2(
     kernel_invoke_batch_size = 1,
     submission_overhead_func = submission_latency,
     completion_latency_func = local_storage_latency,
-    max_iops=Rate(per_second=2000).value,
+    max_iops=Rate(per_second=5000).value,
 )
 
 def cloud_storage_latency(self):

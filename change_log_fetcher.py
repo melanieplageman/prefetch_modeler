@@ -45,8 +45,13 @@ class ChangeLogFetcher(ConstantDistancePrefetcher):
         super().__init__(*args, **kwargs)
 
     def remove(self, io):
+        # submission time should be for cached too?
         if not getattr(io, "cached", False):
             io.submission_time = self.tick
+            if self.waited_at is not None:
+                io.wait_time = self.tick - self.waited_at
+            else:
+                io.wait_time = 0
         return super().remove(io)
 
     @property

@@ -6,11 +6,42 @@ import itertools
 import math
 
 
+# TODO: think about submission time and completion time and where I should
+# check if I am doing it for cached and uncached correctly
+
+# adding wait_time and idle_time to baselines
 class BaselineSync(GlobalCapacityBucket):
     name = 'remaining'
 
+    def __init__(self, *args, **kwargs):
+        self.waited_at = None
+        super().__init__(*args, **kwargs)
+
     def max_buffers(self):
         return 1
+
+    @classmethod
+    def hint(cls):
+        return (1, cls.__name__)
+
+    def remove(self, io):
+        if not getattr(io, "cached", False):
+            if self.waited_at is not None:
+                io.wait_time = self.tick - self.waited_at
+            else:
+                io.wait_time = 0
+            io.submission_time = self.tick
+        return super().remove(io)
+
+    def reaction(self):
+        completed = self.pipeline['completed']
+        for io in completed:
+            io.completion_time = getattr(io, "completion_time", self.tick)
+
+        if self.waited_at is None and self.cnc == 0:
+            self.waited_at = self.tick
+        elif self.waited_at is not None and self.cnc > 0:
+            self.waited_at = None
 
 
 class BaselineFetchAll(ContinueBucket):
@@ -19,6 +50,16 @@ class BaselineFetchAll(ContinueBucket):
     @classmethod
     def hint(cls):
         return (1, cls.__name__)
+
+    def remove(self, io):
+        io.submission_time = self.tick
+        return super().remove(io)
+
+    def reaction(self):
+        completed = self.pipeline['completed']
+        for io in completed:
+            io.completion_time = getattr(io, "completion_time", self.tick)
+
 
 
 class ConstantRatePrefetcher(RateBucket):

@@ -5,7 +5,7 @@ BufferChecker, BaselineFetchAll, BaselineSync
 from prefetch_modeler.core import Rate, Simulation
 from prefetch_modeler.ratelimiter_type import RateLimiter
 from constant_distance_prefetcher import ConstantDistancePrefetcher, \
-VariableDistancePrefetcher, TestConstantPrefetcher
+TestConstantPrefetcher
 from cdvar_prefetcher import CDVariableHeadroom
 from plot import ChartGroup, Chart, MetaChartGroup, ChartType
 from partially_cached_prefetcher import PartiallyCachedPIPrefetcher
@@ -13,7 +13,10 @@ from metric import *
 from prefetch_modeler.core.bucket_type import SequenceMarkerBucket, OrderEnforcerBucket
 from variable_distance_ratelimiter import VariableDistanceLimitPrefetcher
 from change_log_fetcher import ChangeLogFetcher
-from hypothesis import HypothesisFetcher
+from hypothesis import HistoryLimitFetcher
+from blended import BlendedPrefetcher
+from variable_distance_prefetcher import VariableDistancePrefetcher
+from control_fetcher import ControlFetcher
 
 
 class LocalPrefetcher1(PIPrefetcher):
@@ -142,6 +145,7 @@ class BaseGroup(ChartGroup, metaclass=MetaChartGroup):
 # output = [TestGroup(simulation10)]
 # output = [ConstantGroup(simulation12)]
 
+# completed, consumed = even_wl
 # simulation13 = Simulation(ChangeLogFetcher, SequenceMarkerBucket,
 #                          BufferChecker, *fast_local1, completed,
 #                          OrderEnforcerBucket, consumed)
@@ -157,19 +161,58 @@ class BaseGroup(ChartGroup, metaclass=MetaChartGroup):
 
 # output = [ChangeLogGroup(simulation13)]
 
+# simulation4 = Simulation(BaselineFetchAll, SequenceMarkerBucket, *slow_cloud1,
+#         BufferChecker, completed, OrderEnforcerBucket, consumed)
+
+# simulation5 = Simulation(BaselineSync, SequenceMarkerBucket, *slow_cloud1,
+#         BufferChecker, completed, OrderEnforcerBucket, consumed)
+
+# class BaseGroup2(ChartGroup, metaclass=MetaChartGroup):
+#     Drain = ChartType(remaining, done)
+#     Rates = ChartType(max_iops, consumption_rate)
+#     InStorage = ChartType(in_storage)
+#     AvgTotalLatency = ChartType(avg_total_latency_completed_ios)
+#     Wait = Wait
+#     WaitIdle = ChartType(wait_time, idle_time)
+
+
 completed, consumed = even_wl
-simulation14 = Simulation(HypothesisFetcher, SequenceMarkerBucket,
+simulation_blend = Simulation(BlendedPrefetcher, SequenceMarkerBucket,
                          BufferChecker, *slow_cloud1, completed,
                          OrderEnforcerBucket, consumed)
 
-class ChangeLogGroup(ChartGroup, metaclass=MetaChartGroup):
+simulation_variable = Simulation(VariableDistancePrefetcher, SequenceMarkerBucket,
+                         BufferChecker, *slow_cloud1, completed,
+                         OrderEnforcerBucket, consumed)
+
+simulation_history_limiter = Simulation(HistoryLimitFetcher, SequenceMarkerBucket,
+                         BufferChecker, *fast_local1, completed,
+                         OrderEnforcerBucket, consumed)
+
+simulation_both = Simulation(VariableDistancePrefetcher, HistoryLimitFetcher, SequenceMarkerBucket,
+                         BufferChecker, *fast_local1, completed,
+                         OrderEnforcerBucket, consumed)
+
+simulation_control = Simulation(ControlFetcher, SequenceMarkerBucket,
+                         BufferChecker, *fast_local1, completed,
+                         OrderEnforcerBucket, consumed)
+
+class VariableGroup(ChartGroup, metaclass=MetaChartGroup):
     Drain = ChartType(cd_remaining, done)
     Rates = ChartType(max_iops, consumption_rate)
-    AvgProcessTime = ChartType(processing_vs_pfd)
+    Throughput = ChartType(approx_throughput)
     InStorage = ChartType(in_storage, prefetch_distance, completed_not_consumed)
     AvgTotalLatency = ChartType(avg_total_latency_completed_ios)
+    Wait = Wait
     Fetched = ChartType(do_cd_fetch)
     WaitIdle = ChartType(wait_time, idle_time)
-    Wait = Wait
 
-output = [ChangeLogGroup(simulation14)]
+output = [
+        # VariableGroup(simulation_blend),
+        VariableGroup(simulation_both),
+        VariableGroup(simulation_variable),
+        # VariableGroup(simulation_history_limiter),
+        # VariableGroup(simulation_control),
+        # BaseGroup2(simulation4),
+        # BaseGroup2(simulation5)
+        ]

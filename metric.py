@@ -135,6 +135,7 @@ def cd_remaining(pipeline):
 def remaining(pipeline):
     return len(pipeline['remaining'])
 
+
 # @metric
 # def remaining(pipeline):
 #     return len(pipeline['remaining']) + len(pipeline['ratelimiter'])
@@ -280,6 +281,14 @@ def avg_total_latency_completed_ios(pipeline):
         return None
     completion_latencies = [io.completion_time - io.submission_time for io in real_ios]
     return mean(completion_latencies)
+
+@metric
+def throughput(pipeline):
+    return pipeline['deadline'].info.get('to_move', None)
+
+@metric
+def approx_throughput(pipeline):
+    return pipeline['cd_fetcher'].completion_rate
 
 @metric
 def latency_dt(pipeline):
