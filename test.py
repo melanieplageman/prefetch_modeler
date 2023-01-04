@@ -1,5 +1,5 @@
 from prefetch_modeler.storage_type import fast_local1, slow_cloud1
-from prefetch_modeler.workload_type import even_wl, uneven_wl1, uneven_wl2
+from prefetch_modeler.workload_type import even_wl, uneven_wl1, uneven_wl2, sinusoid_workload_type
 from prefetch_modeler.prefetcher_type import PIPrefetcher, BufferMarkerBucket, \
 BufferChecker, BaselineFetchAll, BaselineSync
 from prefetch_modeler.core import Rate, Simulation
@@ -17,6 +17,9 @@ from hypothesis import HistoryLimitFetcher
 from blended import BlendedPrefetcher
 from variable_distance_prefetcher import VariableDistancePrefetcher
 from control_fetcher import ControlFetcher
+from rollback_fetcher import RollbackFetcher
+from periodic_fetcher import PeriodicFetcher
+from simple_fetcher import SimpleFetcher, ClampFetcher
 
 
 class LocalPrefetcher1(PIPrefetcher):
@@ -175,44 +178,68 @@ class BaseGroup(ChartGroup, metaclass=MetaChartGroup):
 #     Wait = Wait
 #     WaitIdle = ChartType(wait_time, idle_time)
 
+class SoloLimitFetcher(HistoryLimitFetcher):
+    name = 'cd_fetcher'
 
-completed, consumed = even_wl
+completed, consumed = uneven_wl1
+# completed, consumed = even_wl
+# completed, consumed = sinusoid_workload_type("Sinusoid Workload", 0.003, 0.2, 10000)
+current_storage = slow_cloud1
+# current_storage = fast_local1
+
 simulation_blend = Simulation(BlendedPrefetcher, SequenceMarkerBucket,
-                         BufferChecker, *slow_cloud1, completed,
+                         BufferChecker, *current_storage, completed,
                          OrderEnforcerBucket, consumed)
 
-simulation_variable = Simulation(VariableDistancePrefetcher, SequenceMarkerBucket,
-                         BufferChecker, *slow_cloud1, completed,
-                         OrderEnforcerBucket, consumed)
-
-simulation_history_limiter = Simulation(HistoryLimitFetcher, SequenceMarkerBucket,
-                         BufferChecker, *fast_local1, completed,
-                         OrderEnforcerBucket, consumed)
-
-simulation_both = Simulation(VariableDistancePrefetcher, HistoryLimitFetcher, SequenceMarkerBucket,
-                         BufferChecker, *fast_local1, completed,
+simulation_history_limiter = Simulation(SoloLimitFetcher, SequenceMarkerBucket,
+                         BufferChecker, *current_storage, completed,
                          OrderEnforcerBucket, consumed)
 
 simulation_control = Simulation(ControlFetcher, SequenceMarkerBucket,
-                         BufferChecker, *fast_local1, completed,
+                         BufferChecker, *current_storage, completed,
                          OrderEnforcerBucket, consumed)
 
-class VariableGroup(ChartGroup, metaclass=MetaChartGroup):
+simulation_rollback = Simulation(RollbackFetcher, SequenceMarkerBucket,
+                         BufferChecker, *current_storage, completed,
+                         OrderEnforcerBucket, consumed)
+
+simulation_variable = Simulation(VariableDistancePrefetcher, SequenceMarkerBucket,
+                         BufferChecker, *current_storage, completed,
+                         OrderEnforcerBucket, consumed)
+
+simulation_simple = Simulation(SimpleFetcher, SequenceMarkerBucket,
+                         BufferChecker, *current_storage, completed,
+                         OrderEnforcerBucket, consumed)
+
+simulation_clamped = Simulation(ClampFetcher, SequenceMarkerBucket,
+                         BufferChecker, *current_storage, completed,
+                         OrderEnforcerBucket, consumed)
+
+class SingleFetcherGroup(ChartGroup, metaclass=MetaChartGroup):
     Drain = ChartType(cd_remaining, done)
     Rates = ChartType(max_iops, consumption_rate)
-    Throughput = ChartType(approx_throughput)
-    InStorage = ChartType(in_storage, prefetch_distance, completed_not_consumed)
+    # CompletionRate = ChartType(completion_rate)
     AvgTotalLatency = ChartType(avg_total_latency_completed_ios)
     Wait = Wait
-    Fetched = ChartType(do_cd_fetch)
     WaitIdle = ChartType(wait_time, idle_time)
+    InStorage = ChartType(in_storage, prefetch_distance, completed_not_consumed)
+
+class SingleFetcherGroup2(ChartGroup, metaclass=MetaChartGroup):
+    Drain = ChartType(cd_remaining, done)
+    Rates = ChartType(max_iops, consumption_rate)
+    CompletionRate = ChartType(completion_rate)
+    AvgTotalLatency = ChartType(avg_total_latency_completed_ios)
+    Wait = Wait
+    WaitIdle = ChartType(wait_time, idle_time)
+    InStorage = ChartType(in_storage, prefetch_distance, completed_not_consumed)
+    Stats = ChartType(latency)
+    Throughput = ChartType(through)
+    # InStorage = ChartType(in_storage, completed_not_consumed)
+    # PrefetchDistanceThroughput = ChartType(prefetch_throughput)
+    # ThroughputWithCached = ChartType(throughput_w_cached)
 
 output = [
-        # VariableGroup(simulation_blend),
-        VariableGroup(simulation_both),
-        VariableGroup(simulation_variable),
-        # VariableGroup(simulation_history_limiter),
-        # VariableGroup(simulation_control),
-        # BaseGroup2(simulation4),
-        # BaseGroup2(simulation5)
+        # SingleFetcherGroup2(simulation_simple),
+        SingleFetcherGroup2(simulation_clamped),
+        # SingleFetcherGroup2(simulation_periodic),
         ]

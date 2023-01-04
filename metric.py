@@ -1,5 +1,5 @@
 from prefetch_modeler.core import Metric
-from numpy import mean
+from numpy import mean, std
 
 
 
@@ -7,14 +7,16 @@ def metric(function):
     metric_type = type(Metric)(function.__name__, (Metric,), {"function": staticmethod(function)})
     return metric_type
 
-
 @metric
 def wait_time(pipeline):
     return pipeline['cd_fetcher'].info.get('wait_time', 0)
 
 @metric
 def idle_time(pipeline):
-    return -pipeline['cd_fetcher'].info.get('idle_time', 0)
+    idle_time = pipeline['cd_fetcher'].info.get('idle_time', 0)
+    if idle_time is None:
+        return None
+    return -idle_time
 
 
 @metric
@@ -128,6 +130,10 @@ def completed_not_consumed(pipeline):
     return len(pipeline['completed'])
 
 @metric
+def modified_cnc(pipeline):
+    return pipeline['cd_fetcher'].completed
+
+@metric
 def cd_remaining(pipeline):
     return len(pipeline['cd_fetcher'])
 
@@ -147,6 +153,10 @@ def done(pipeline):
 @metric
 def prefetch_distance(pipeline):
     return pipeline['cd_fetcher'].prefetch_distance
+
+@metric
+def limit_fetcher_distance(pipeline):
+    return pipeline['limiter'].prefetch_distance
 
 @metric
 def constant_cnc_headroom(pipeline):
@@ -241,7 +251,6 @@ def prefetch_rate(pipeline):
 @metric
 def max_iops(pipeline):
     return float(pipeline['inflight'].rate())
-    return float(pipeline['submitted'].storage_speed)
 
 
 @metric
@@ -283,12 +292,21 @@ def avg_total_latency_completed_ios(pipeline):
     return mean(completion_latencies)
 
 @metric
-def throughput(pipeline):
+def completions(pipeline):
     return pipeline['deadline'].info.get('to_move', None)
 
 @metric
-def approx_throughput(pipeline):
+def completion_rate(pipeline):
+    return pipeline['cd_fetcher'].info.get('completion_rate', None)
     return pipeline['cd_fetcher'].completion_rate
+
+@metric
+def prefetch_throughput(pipeline):
+    return pipeline['cd_fetcher'].info.get('throughput', None)
+
+@metric
+def throughput_w_cached(pipeline):
+    return pipeline['cd_fetcher'].info.get('throughput_w_cached', None)
 
 @metric
 def latency_dt(pipeline):
@@ -320,7 +338,36 @@ def latency_cost_dt(pipeline):
     return pipeline['cd_fetcher'].info.get('latency_cost_dt', None)
 
 @metric
-def processing_vs_pfd(pipeline):
-    avg_p_t = pipeline['consumed'].info.get('avg_processing_time', 0)
-    return avg_p_t
+def latency(pipeline):
+    prefetch_distance = pipeline['cd_fetcher'].prefetch_distance
+    if not pipeline['cd_fetcher'].consume_log:
+        return None
+    ios = list(reversed(pipeline['cd_fetcher'].consume_log))[:int(prefetch_distance)]
+    return mean([io.completion_time - io.submission_time for io in ios if not
+        getattr(io, 'cached', False)])
+
+@metric
+def through(pipeline):
+    prefetch_distance = pipeline['cd_fetcher'].prefetch_distance
+    if not pipeline['cd_fetcher'].consume_log:
+        return None
+    ios = list(reversed(pipeline['cd_fetcher'].consume_log))[:int(prefetch_distance)]
+    return mean([io.prefetch_distance / (io.completion_time -
+        io.submission_time) for io in ios if not getattr(io, "cached", False)])
+
+@metric
+def avg_tput_avg_pfd(pipeline):
+    prefetch_distance = pipeline['cd_fetcher'].prefetch_distance
+    if not pipeline['cd_fetcher'].consume_log:
+        return None
+    ios = list(reversed(pipeline['cd_fetcher'].consume_log))[:int(prefetch_distance)]
+    avg_tput = mean([io.prefetch_distance / (io.completion_time -
+        io.submission_time) for io in ios if not getattr(io, "cached", False)])
+    avg_pfd = mean([io.prefetch_distance for io in ios])
+    return avg_tput / avg_pfd
+
+# @metric
+# def processing_vs_pfd(pipeline):
+#     avg_p_t = pipeline['consumed'].info.get('avg_processing_time', 0)
+#     return avg_p_t
 

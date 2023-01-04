@@ -20,7 +20,9 @@ class Metric:
 
     @property
     def data(self):
-        return pd.DataFrame.from_records(self._data, index='tick')
+        df = pd.DataFrame.from_records(self._data, index='tick')
+        print(df)
+        return df
 
     @staticmethod
     def function(pipeline):
@@ -39,8 +41,8 @@ class Simulation:
         for i, io in enumerate(ios):
             if i % 2 == 0:
                 io.cached = True
-            # if i > volume / 1.5:
-            #     io.cached = True
+        #     # if i > volume / 1.5:
+        #     #     io.cached = True
 
         pipeline = Pipeline(*[bucket_type(
             getattr(bucket_type, 'name', bucket_type.__name__)

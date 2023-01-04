@@ -20,6 +20,7 @@ class ChangeLogEntry:
     throughput: float
 
 class HistoryLimitFetcher(ConstantDistancePrefetcher):
+    name = 'limiter'
     headroom = 2
     target_idle_time = 20
 

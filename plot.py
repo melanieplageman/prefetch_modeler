@@ -69,7 +69,10 @@ class ChartGroup:
                 upper = upper * 1.15 if upper is not None else upper
                 axes[row][col].set_ylim(lower, upper)
                 axes[row][col].set_xlim(xlimit.lower, xlimit.upper)
-                chart.plot(axes[row][col])
+                try:
+                    chart.plot(axes[row][col])
+                except Exception:
+                    print(f"Can't plot metric {chart.name}")
 
         for i, chart_group in enumerate(chart_groups):
             axes[0][i].set_title(chart_group.title)
@@ -90,7 +93,7 @@ class Limit:
         return f'Limit({self.lower!r}, {self.upper!r})'
 
     def set_upper(self, val):
-        if val is not None and math.isnan(val):
+        if val is None or math.isnan(val):
             return
         if self.upper is None:
             self.upper = val
@@ -99,7 +102,7 @@ class Limit:
             self.upper = val
 
     def set_lower(self, val):
-        if val is not None and math.isnan(val):
+        if val is None or math.isnan(val):
             return
         if self.lower is None:
             self.lower = val

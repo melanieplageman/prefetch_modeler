@@ -6,6 +6,7 @@ from fractions import Fraction
 import itertools
 import math
 from numpy import mean
+from itertools import takewhile
 
 class ConstantDistancePrefetcher(GlobalCapacityBucket):
     name = 'cd_fetcher'
@@ -26,6 +27,7 @@ class CompletionLogEntry:
 @dataclass
 class ChangeLogEntry:
     tick: int
+    old_prefetch_distance: int
     prefetch_distance: int
     throughput: float
 
@@ -33,6 +35,7 @@ class BlendedPrefetcher(ConstantDistancePrefetcher):
     headroom = 2
     target_idle_time = 20
     multiplier = 1 / 20_000_000
+    throughput_threshhold = 0.2
 
     def __init__(self, *args, **kwargs):
         self.prefetch_distance = self.headroom
@@ -63,7 +66,6 @@ class BlendedPrefetcher(ConstantDistancePrefetcher):
     def completion_rate(self):
         if not self.completion_log:
             return None
-        from itertools import takewhile
         newlog = takewhile(
             lambda entry: entry.tick > self.tick - self.tput_denom,
             reversed(self.completion_log)
@@ -100,13 +102,15 @@ class BlendedPrefetcher(ConstantDistancePrefetcher):
 
         if self.calculated_pfd is not None:
             self.prefetch_distance = self.calculated_pfd
+            self.calculated_pfd = None
 
         if old_pfd != self.prefetch_distance:
-            # print(f'tick: {self.tick}. old pfd: {self.prefetch_distance}. new pfd: {self.prefetch_distance}')
+            # print(f'tick: {self.tick}. old pfd: {old_pfd}. new pfd: {self.prefetch_distance}')
             crate = self.completion_rate
             tput = crate if crate is not None else 0
             self.change_log.append(ChangeLogEntry(tick=self.tick,
-                prefetch_distance=self.prefetch_distance, throughput=tput))
+                prefetch_distance=self.prefetch_distance,
+                old_prefetch_distance=old_pfd, throughput=tput))
 
         self.adjust = False
         self.last_adjusted = self.tick
@@ -121,6 +125,19 @@ class BlendedPrefetcher(ConstantDistancePrefetcher):
     @property
     def cnc(self):
         return len(self.pipeline['completed'])
+
+    def most_recent_pfd_w_same_tput(self, target_tput):
+        if not self.change_log:
+            return None
+        # for i, entry in enumerate(reversed(self.change_log)):
+        #     if entry.throughput < target_tput:
+        newlog = takewhile(
+            lambda entry: entry.throughput >= target_tput,
+            reversed(self.change_log)
+        )
+        newlog = list(newlog)
+        # print(newlog[-1], newlog[0])
+        return newlog[-1]
 
     def reaction(self):
         # Determine current wait time
@@ -178,11 +195,17 @@ class BlendedPrefetcher(ConstantDistancePrefetcher):
         avg_tput = avg_tput / nentries
         avg_pfd = avg_pfd / nentries
 
-        if tput < avg_tput:
-            self.calculated_pfd = avg_pfd
+        if tput <= avg_tput:
+            last_change_same_tput = self.most_recent_pfd_w_same_tput(tput)
+            new_old_pfd = last_change_same_tput.prefetch_distance
+            new_old_tput = last_change_same_tput.throughput
+            to_print = f'new_old_pfd: {new_old_pfd}. current pfd: {self.prefetch_distance}. new_old_tput: {new_old_tput}. consumed io tput: {avg_tput}. current tput: {tput}. {100 - (tput/avg_tput*100)}% faster than consumed io tput.'
+            print(to_print)
+            self.calculated_pfd = new_old_pfd
+            # TODO: to adjust or not?
+            # self.adjust = True
         else:
             self.calculated_pfd = None
 
     def next_action(self):
         return self.tick + 1 if self.adjust else super().next_action()
-

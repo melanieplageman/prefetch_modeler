@@ -29,11 +29,11 @@ class VariableDistancePrefetcher(ConstantDistancePrefetcher):
     multiplier = 1 / 20_000_000
 
     def __init__(self, *args, **kwargs):
-        self.prefetch_distance = self.headroom
+        self.prefetch_distance = 8
 
         self.waited_at = None
         self.last_adjusted = 0
-        self.adjust = True
+        self.adjust = False
 
         self.tput_denom = 100000
 
@@ -74,6 +74,8 @@ class VariableDistancePrefetcher(ConstantDistancePrefetcher):
         if self.adjust is False:
             return int(self.prefetch_distance)
 
+        new_pfd = self.prefetch_distance
+
         if self.waited_at is not None:
             wait_time = self.tick - self.waited_at
         else:
@@ -86,9 +88,10 @@ class VariableDistancePrefetcher(ConstantDistancePrefetcher):
 
         multiplier = self.multiplier * (self.tick - self.last_adjusted)
 
-        self.prefetch_distance += multiplier * delta
-        self.prefetch_distance = max(self.prefetch_distance, 0)
+        new_pfd += multiplier * delta
+        new_pfd = max(new_pfd, 2)
 
+        self.prefetch_distance = new_pfd
         self.adjust = False
         self.last_adjusted = self.tick
 
@@ -104,9 +107,7 @@ class VariableDistancePrefetcher(ConstantDistancePrefetcher):
 
     def reaction(self):
         # Determine current wait time
-        if len(self) == 0:
-            self.waited_at = None
-        elif self.waited_at is None and self.cnc < self.headroom:
+        if self.waited_at is None and self.cnc < self.headroom:
             self.waited_at = self.tick
         elif self.waited_at is not None and self.cnc >= self.headroom:
             self.waited_at = None
